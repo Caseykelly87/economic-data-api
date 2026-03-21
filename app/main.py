@@ -1,12 +1,26 @@
 import logging
+import time
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
+from app.core.logging_config import configure_logging
+from app.db.session import get_db
 from app.api.routes import series, metrics, insights
 
+# Configure logging before the app object is used by anything else.
+configure_logging(settings.LOG_LEVEL)
+
 logger = logging.getLogger(__name__)
+request_logger = logging.getLogger("api.requests")
+
+# ---------------------------------------------------------------------------
+# Application
+# ---------------------------------------------------------------------------
 
 app = FastAPI(
     title=settings.API_TITLE,
@@ -15,19 +29,78 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+
+# ---------------------------------------------------------------------------
+# Middleware
+# ---------------------------------------------------------------------------
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    """Log method, path, status code, and elapsed time for every request."""
+
+    async def dispatch(self, request: Request, call_next):
+        start = time.perf_counter()
+        response = await call_next(request)
+        ms = (time.perf_counter() - start) * 1000
+        request_logger.info(
+            "%s %s → %d  (%.1f ms)",
+            request.method,
+            request.url.path,
+            response.status_code,
+            ms,
+        )
+        return response
+
+
+app.add_middleware(RequestLoggingMiddleware)
+
+# ---------------------------------------------------------------------------
+# Routers
+# ---------------------------------------------------------------------------
+
 app.include_router(series.router)
 app.include_router(metrics.router)
 app.include_router(insights.router)
 
 
-@app.get("/health", tags=["health"])
-def health_check():
-    return {"status": "ok", "version": settings.API_VERSION}
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
 
+@app.get("/health", tags=["health"])
+def health_check(db: Session = Depends(get_db)):
+    """
+    Liveness + readiness check.
+
+    Returns 200 when the API and database are both reachable.
+    Returns 503 when the database cannot be reached, so load balancers and
+    orchestrators can route traffic away from unhealthy instances.
+    """
+    try:
+        db.execute(text("SELECT 1"))
+        db_status = "connected"
+        http_status = 200
+        api_status = "ok"
+    except Exception:
+        logger.warning("Database health check failed", exc_info=True)
+        db_status = "unavailable"
+        http_status = 503
+        api_status = "degraded"
+
+    return JSONResponse(
+        status_code=http_status,
+        content={"status": api_status, "version": settings.API_VERSION, "db": db_status},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Global error handler
+# ---------------------------------------------------------------------------
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.error("Unhandled error on %s %s: %s", request.method, request.url, exc, exc_info=True)
+    logger.error(
+        "Unhandled error on %s %s: %s", request.method, request.url, exc, exc_info=True
+    )
     return JSONResponse(
         status_code=500,
         content={"detail": "An internal server error occurred."},

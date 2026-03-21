@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     API_ENV: str = "development"
     API_TITLE: str = "Economic Data API"
     API_VERSION: str = "1.0.0"
+    LOG_LEVEL: str = "INFO"
 
     @property
     def database_url(self) -> str:
