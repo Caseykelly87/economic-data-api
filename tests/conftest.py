@@ -13,9 +13,13 @@ from app.db.session import get_db
 
 
 @pytest.fixture
-def client():
-    """TestClient with DB dependency overridden by a MagicMock session."""
-    mock_db = MagicMock()
+def mock_db():
+    return MagicMock()
+
+
+@pytest.fixture
+def client(mock_db):
+    """TestClient with DB dependency overridden by a controllable MagicMock session."""
     app.dependency_overrides[get_db] = lambda: mock_db
     with TestClient(app) as c:
         yield c
