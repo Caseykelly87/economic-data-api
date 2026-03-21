@@ -1,23 +1,19 @@
 from datetime import date
-from decimal import Decimal
 
 from pydantic import BaseModel
 
 
 class ObservationOut(BaseModel):
     observation_date: date
-    value: Decimal | None
+    value: float | None
 
     model_config = {"from_attributes": True}
 
 
 class SeriesOut(BaseModel):
     series_id: str
-    name: str
-    description: str | None
-    category: str | None
-    unit: str | None
-    frequency: str | None
+    series_name: str
+    source: str | None
 
     model_config = {"from_attributes": True}
 
@@ -28,10 +24,10 @@ class SeriesDetailOut(SeriesOut):
 
 class InflationOut(BaseModel):
     series_id: str
-    name: str
-    unit: str | None
+    series_name: str
+    source: str | None
     latest_date: date | None
-    latest_value: Decimal | None
+    latest_value: float | None
     observations: list[ObservationOut] = []
 
     model_config = {"from_attributes": True}
@@ -39,10 +35,10 @@ class InflationOut(BaseModel):
 
 class UnemploymentOut(BaseModel):
     series_id: str
-    name: str
-    unit: str | None
+    series_name: str
+    source: str | None
     latest_date: date | None
-    latest_value: Decimal | None
+    latest_value: float | None
     observations: list[ObservationOut] = []
 
     model_config = {"from_attributes": True}
@@ -50,10 +46,10 @@ class UnemploymentOut(BaseModel):
 
 class KeyIndicator(BaseModel):
     series_id: str
-    name: str
-    unit: str | None
+    series_name: str
+    source: str | None
     latest_date: date | None
-    latest_value: Decimal | None
+    latest_value: float | None
 
     model_config = {"from_attributes": True}
 
