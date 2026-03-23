@@ -16,6 +16,13 @@ class Settings(BaseSettings):
     API_TITLE: str = "Economic Data API"
     API_VERSION: str = "1.0.0"
     LOG_LEVEL: str = "INFO"
+    # Comma-separated list of allowed origins, or "*" for any (development only).
+    # Production example: "https://app.example.com,https://admin.example.com"
+    CORS_ORIGINS: str = "*"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
     @property
     def database_url(self) -> str:

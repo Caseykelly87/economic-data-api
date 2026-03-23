@@ -2,6 +2,7 @@ import logging
 import time
 
 from fastapi import Depends, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -52,6 +53,17 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(RequestLoggingMiddleware)
+
+# CORSMiddleware must be added after other middleware so it runs outermost.
+# Controlled by CORS_ORIGINS in .env — use "*" for local dev, explicit
+# origins in staging/production.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=False,   # no cookies or auth headers yet
+    allow_methods=["GET"],     # read-only API
+    allow_headers=["*"],
+)
 
 # ---------------------------------------------------------------------------
 # Routers
