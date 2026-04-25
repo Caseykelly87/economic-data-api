@@ -1,42 +1,70 @@
 from datetime import date
-from decimal import Decimal
 
-from sqlalchemy import String, Date, Numeric, ForeignKey, Integer
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import String, Date, Float
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
 
 
-class EconomicSeries(Base):
-    """
-    Represents a named economic data series (e.g., CPI, Unemployment Rate).
-    Maps to the mart table populated by the ETL service.
-    """
-    __tablename__ = "economic_series"
+class DimSeries(Base):
+    __tablename__ = "dim_series"
+    __table_args__ = {"schema": "raw"}
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    series_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[str | None] = mapped_column(String(1024), nullable=True)
-    category: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    unit: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    frequency: Mapped[str | None] = mapped_column(String(32), nullable=True)
-
-    observations: Mapped[list["SeriesObservation"]] = relationship(
-        "SeriesObservation", back_populates="series", lazy="select"
-    )
+    series_id: Mapped[str] = mapped_column(String, primary_key=True)
+    series_name: Mapped[str] = mapped_column(String, nullable=False)
+    source: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
-class SeriesObservation(Base):
-    """
-    A single data point for an economic series on a given date.
-    Maps to the mart table populated by the ETL service.
-    """
-    __tablename__ = "series_observations"
+class FactObservation(Base):
+    __tablename__ = "fact_economic_observations"
+    __table_args__ = {"schema": "raw"}
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    series_id: Mapped[int] = mapped_column(Integer, ForeignKey("economic_series.id"), nullable=False, index=True)
-    observation_date: Mapped[date] = mapped_column(Date, nullable=False)
-    value: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
+    series_id: Mapped[str] = mapped_column(String, primary_key=True)
+    series_name: Mapped[str] = mapped_column(String, nullable=False)
+    date: Mapped[str] = mapped_column(String, primary_key=True)  # stored as text in DB
+    value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    series: Mapped["EconomicSeries"] = relationship("EconomicSeries", back_populates="observations")
+
+class MartInflation(Base):
+    __tablename__ = "mart_inflation"
+    __table_args__ = {"schema": "public_analytics"}
+
+    series_id: Mapped[str] = mapped_column(String, primary_key=True)
+    observation_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    series_name: Mapped[str] = mapped_column(String, nullable=False)
+    value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class MartLaborMarket(Base):
+    __tablename__ = "mart_labor_market"
+    __table_args__ = {"schema": "public_analytics"}
+
+    series_id: Mapped[str] = mapped_column(String, primary_key=True)
+    observation_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    series_name: Mapped[str] = mapped_column(String, nullable=False)
+    value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class MartGdp(Base):
+    __tablename__ = "mart_gdp"
+    __table_args__ = {"schema": "public_analytics"}
+
+    series_id: Mapped[str] = mapped_column(String, primary_key=True)
+    observation_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    series_name: Mapped[str] = mapped_column(String, nullable=False)
+    value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class MartEconomicSummary(Base):
+    __tablename__ = "mart_economic_summary"
+    __table_args__ = {"schema": "public_analytics"}
+
+    series_id: Mapped[str] = mapped_column(String, primary_key=True)
+    series_name: Mapped[str] = mapped_column(String, nullable=False)
+    source: Mapped[str | None] = mapped_column(String, nullable=True)
+    latest_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    latest_value: Mapped[float | None] = mapped_column(Float, nullable=True)
