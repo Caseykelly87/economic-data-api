@@ -11,7 +11,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import settings
 from app.core.logging_config import configure_logging
 from app.db.session import get_db
-from app.api.routes import series, metrics, insights
+from app.api.routes import series, metrics, insights, store_metrics, anomalies, dashboard
 
 # Configure logging before the app object is used by anything else.
 configure_logging(settings.LOG_LEVEL)
@@ -72,6 +72,28 @@ app.add_middleware(
 app.include_router(series.router)
 app.include_router(metrics.router)
 app.include_router(insights.router)
+app.include_router(store_metrics.router)
+app.include_router(anomalies.router)
+app.include_router(dashboard.router)
+
+
+# ---------------------------------------------------------------------------
+# Startup signaling
+# ---------------------------------------------------------------------------
+# Make demo-vs-live data source visible the moment the api boots, so a
+# misconfigured deployment shows up in the logs rather than silently
+# serving fixture data.
+if settings.grocery_data_source == "fixtures":
+    logger.warning(
+        "STORE_METRICS_PATH and/or ANOMALY_FLAGS_PATH unset or unreadable. "
+        "Serving bundled demo fixtures from %s. Set both env vars to use "
+        "live ETL output.",
+        settings.GROCERY_FIXTURES_DIR,
+    )
+else:
+    logger.info(
+        "Grocery data source: live (STORE_METRICS_PATH and ANOMALY_FLAGS_PATH configured)."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +122,12 @@ def health_check(db: Session = Depends(get_db)):
 
     return JSONResponse(
         status_code=http_status,
-        content={"status": api_status, "version": settings.API_VERSION, "db": db_status},
+        content={
+            "status": api_status,
+            "version": settings.API_VERSION,
+            "db": db_status,
+            "data_source": settings.grocery_data_source,
+        },
     )
 
 

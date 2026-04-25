@@ -1,4 +1,5 @@
 """Tests for GET /health — status check including DB connectivity."""
+from unittest.mock import patch
 
 
 def test_health_returns_200(client):
@@ -38,3 +39,26 @@ def test_health_status_degraded_when_db_unavailable(client, mock_db):
     data = client.get("/health").json()
     assert data["status"] == "degraded"
     assert data["db"] == "unavailable"
+
+
+def test_health_response_has_data_source_field(client):
+    data = client.get("/health").json()
+    assert "data_source" in data
+
+
+def test_health_data_source_is_fixtures_by_default(client):
+    # No STORE_METRICS_PATH or ANOMALY_FLAGS_PATH env var set in tests.
+    data = client.get("/health").json()
+    assert data["data_source"] == "fixtures"
+
+
+def test_health_data_source_is_live_when_paths_exist(client, tmp_path):
+    metrics = tmp_path / "store_daily_metrics.parquet"
+    flags = tmp_path / "anomaly_flags.parquet"
+    metrics.write_bytes(b"")
+    flags.write_bytes(b"")
+    from app.core.config import settings
+    with patch.object(settings, "STORE_METRICS_PATH", str(metrics)), \
+         patch.object(settings, "ANOMALY_FLAGS_PATH", str(flags)):
+        data = client.get("/health").json()
+    assert data["data_source"] == "live"

@@ -7,6 +7,16 @@ from app.schemas.economic import (
     KeyIndicator,
     SummaryOut,
 )
+from app.schemas.grocery import (
+    StoreMetricOut,
+    PaginatedStoreMetricsOut,
+    AnomalyFlagOut,
+    PaginatedAnomaliesOut,
+    StoreRevenueRank,
+    SeverityCount,
+    DailySalesPoint,
+    DashboardSummaryOut,
+)
 
 __all__ = [
     "ObservationOut",
@@ -16,4 +26,12 @@ __all__ = [
     "UnemploymentOut",
     "KeyIndicator",
     "SummaryOut",
+    "StoreMetricOut",
+    "PaginatedStoreMetricsOut",
+    "AnomalyFlagOut",
+    "PaginatedAnomaliesOut",
+    "StoreRevenueRank",
+    "SeverityCount",
+    "DailySalesPoint",
+    "DashboardSummaryOut",
 ]

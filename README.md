@@ -39,6 +39,9 @@ cp .env.example .env
 | `API_TITLE` | No | `Economic Data API` | Title shown in docs |
 | `API_VERSION` | No | `1.0.0` | Version shown in docs |
 | `LOG_LEVEL` | No | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `STORE_METRICS_PATH` | No | — | Path to live `store_daily_metrics.parquet` from the upstream ETL. Falls back to bundled fixtures if unset or unreadable. |
+| `ANOMALY_FLAGS_PATH` | No | — | Path to live `anomaly_flags.parquet` from the upstream ETL. Falls back to bundled fixtures if unset or unreadable. |
+| `GROCERY_FIXTURES_DIR` | No | `app/fixtures` | Directory where bundled demo parquets live. Used as the fallback source. |
 
 ---
 
@@ -82,12 +85,16 @@ Liveness and readiness check. Pings the database with `SELECT 1`.
 | `503` | Database is unreachable |
 
 ```json
-{ "status": "ok", "version": "1.0.0", "db": "connected" }
+{ "status": "ok", "version": "1.0.0", "db": "connected", "data_source": "fixtures" }
 ```
 
 ```json
-{ "status": "degraded", "version": "1.0.0", "db": "unavailable" }
+{ "status": "degraded", "version": "1.0.0", "db": "unavailable", "data_source": "live" }
 ```
+
+`data_source` reports which grocery dataset the API is serving — `"live"` when `STORE_METRICS_PATH` and `ANOMALY_FLAGS_PATH` both point at readable parquet files, `"fixtures"` when the API has fallen back to the bundled demo dataset.
+
+The `db` and `data_source` fields are independent. `data_source` is computed from filesystem checks and populates correctly regardless of database availability, so a `503` response with `data_source: "fixtures"` still carries valid grocery-data signaling. In environments without a reachable PostgreSQL instance — local sandboxes, throwaway containers — `/health` will return `503` while the grocery endpoints (`/store-metrics`, `/anomalies`, `/dashboard-summary`) continue to serve correctly, since they read from parquet rather than the database.
 
 ---
 
@@ -226,6 +233,48 @@ Pre-aggregated snapshot of all key indicators from `public_analytics.mart_econom
 
 ---
 
+### Grocery Data Endpoints
+
+Three endpoints expose the upstream ETL's parquet outputs (`store_daily_metrics`, `anomaly_flags`) as JSON. They power the Knot Shore portal's KPI overview, exception list, and store-detail views.
+
+#### `GET /store-metrics`
+
+Paginated store-day metric rows. Filterable by `start_date`, `end_date`, `store_id`. Pagination via `limit` (1–200, default 50) and `offset`. Same envelope as `/series` (`total`, `limit`, `offset`, `items`).
+
+#### `GET /anomalies`
+
+Paginated detection flags. Filterable by `start_date`, `end_date`, `store_id`, `severity_level` (`info`/`warning`/`critical`), and `rule_id` (`revenue_band`/`labor_pct_band`/`transactions_band`). Same envelope.
+
+#### `GET /dashboard-summary`
+
+Single-shot KPI overview over a required `start_date`/`end_date` window: total sales, total transactions, average labor pct, top-5 stores by revenue, exception counts by severity (always all three levels reported, including zero counts), and a daily sales trend series.
+
+#### Live mode vs demo mode
+
+The API runs in one of two modes, automatically detected at request time:
+
+- **Live** — `STORE_METRICS_PATH` and `ANOMALY_FLAGS_PATH` env vars both point at readable parquet files (typically the ETL's `data/processed/` output). `/health` reports `data_source: "live"`.
+- **Demo** — the env vars are unset or point at unreadable paths. The API serves the bundled fixture parquets at `app/fixtures/`. The startup log prints a WARNING and `/health` reports `data_source: "fixtures"`.
+
+Demo mode is the default for fresh clones — the API works out of the box without any configuration.
+
+#### Regenerating bundled demo fixtures
+
+The fixtures in `app/fixtures/` are produced deterministically by `scripts/generate_demo_fixtures.py`. Run only after a deliberate change to demo data shape:
+
+```bash
+venv/Scripts/python.exe scripts/generate_demo_fixtures.py    # Windows
+venv/bin/python scripts/generate_demo_fixtures.py            # POSIX
+```
+
+The script is seeded so successive runs produce byte-identical output. Both the script and its parquet outputs are committed.
+
+#### Planned: `GET /contextual-insights`
+
+Originally scoped for this MVP and deferred pending portal-side requirement clarification. Will join macroeconomic context (CPI, unemployment) onto Knot Shore performance to surface "exceptions during economic stress" narratives.
+
+---
+
 ## Architecture
 
 ```
@@ -237,17 +286,32 @@ app/
 ├── api/routes/
 │   ├── series.py            # /series endpoints
 │   ├── metrics.py           # /metrics endpoints
-│   └── insights.py          # /insights endpoints
+│   ├── insights.py          # /insights endpoints
+│   ├── store_metrics.py     # /store-metrics endpoint
+│   ├── anomalies.py         # /anomalies endpoint
+│   └── dashboard.py         # /dashboard-summary endpoint
+├── fixtures/                # Bundled demo parquets used when live paths unset
 ├── models/economic.py       # SQLAlchemy ORM models (read-only, no migrations)
-├── schemas/economic.py      # Pydantic request/response schemas
-└── services/economic.py     # Query logic; all DB access lives here
+├── schemas/
+│   ├── economic.py          # Pydantic schemas for series/metrics/insights
+│   └── grocery.py           # Pydantic schemas for grocery endpoints
+└── services/
+    ├── economic.py          # Query logic for postgres-backed endpoints
+    └── grocery.py           # Parquet IO + aggregation for grocery endpoints
+
+scripts/
+└── generate_demo_fixtures.py  # Deterministic generator for app/fixtures/
 
 tests/
 ├── conftest.py              # Client fixture with mocked DB session
 ├── test_health.py
 ├── test_series.py
 ├── test_metrics.py
-└── test_insights.py
+├── test_insights.py
+├── test_grocery_service.py
+├── test_store_metrics.py
+├── test_anomalies.py
+└── test_dashboard.py
 ```
 
 ### Database schemas
