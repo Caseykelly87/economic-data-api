@@ -47,17 +47,18 @@ GET /health
 ```
 
 ```json
-{ "status": "ok", "version": "1.0.0", "db": "connected" }
+{ "status": "ok", "version": "1.0.0", "db": "connected", "data_source": "fixtures" }
 ```
 
 ```json
-{ "status": "degraded", "version": "1.0.0", "db": "unavailable" }
+{ "status": "degraded", "version": "1.0.0", "db": "unavailable", "data_source": "live" }
 ```
 
 | Field | Values |
 |---|---|
 | `status` | `"ok"` or `"degraded"` |
 | `db` | `"connected"` or `"unavailable"` |
+| `data_source` | `"live"` or `"fixtures"` — see [section 8](#8-demo-mode) |
 | HTTP status | `200` (ok) or `503` (degraded) |
 
 ---
@@ -334,6 +335,138 @@ assume a fixed order.
 
 ---
 
+### 4.7 `GET /store-metrics` — Paginated store-day metrics
+
+Rows from `store_daily_metrics` (one row per store per day) with date and store filters and pagination.
+
+**Query parameters** (all optional)
+
+| Param | Type | Default | Constraints | Description |
+|---|---|---|---|---|
+| `start_date` | `YYYY-MM-DD` | — | — | Include rows on or after this date (inclusive) |
+| `end_date` | `YYYY-MM-DD` | — | — | Include rows on or before this date (inclusive) |
+| `store_id` | integer | — | 1–8 | Filter to a single store |
+| `limit` | integer | `50` | 1–200 | Items per page |
+| `offset` | integer | `0` | ≥ 0 | Items to skip |
+
+**Response `200`**
+
+```json
+{
+  "total": 1464,
+  "limit": 50,
+  "offset": 0,
+  "items": [
+    {
+      "date": "2026-01-15",
+      "store_id": 2,
+      "total_sales": 121345.67,
+      "transaction_count": 3198,
+      "avg_basket_size": 37.94,
+      "labor_cost_pct": 0.108
+    }
+  ]
+}
+```
+
+`avg_basket_size` and `labor_cost_pct` may be `null` if the source row had no value.
+
+---
+
+### 4.8 `GET /anomalies` — Paginated anomaly flags
+
+Rows from `anomaly_flags` (one row per detected exception) with date, store, severity, and rule filters.
+
+**Query parameters** (all optional)
+
+| Param | Type | Default | Constraints | Description |
+|---|---|---|---|---|
+| `start_date` | `YYYY-MM-DD` | — | — | Include rows on or after this date |
+| `end_date` | `YYYY-MM-DD` | — | — | Include rows on or before this date |
+| `store_id` | integer | — | 1–8 | Filter to a single store |
+| `severity_level` | string | — | `info` / `warning` / `critical` | Filter to a severity level. Unknown values return 422. |
+| `rule_id` | string | — | `revenue_band` / `labor_pct_band` / `transactions_band` | Filter to a detection rule. Unknown values return 422. |
+| `limit` | integer | `50` | 1–200 | Items per page |
+| `offset` | integer | `0` | ≥ 0 | Items to skip |
+
+**Response `200`**
+
+```json
+{
+  "total": 45,
+  "limit": 50,
+  "offset": 0,
+  "items": [
+    {
+      "date": "2026-01-15",
+      "store_id": 2,
+      "rule_id": "revenue_band",
+      "actual_value": 145000.0,
+      "expected_low": 78000.0,
+      "expected_high": 125000.0,
+      "distance_from_band": 20000.0,
+      "severity_score": 0.87,
+      "severity_level": "info"
+    }
+  ]
+}
+```
+
+`severity_score` is a unitless ratio of how far the actual value sits beyond the expected band, expressed in band-widths. Use `severity_level` for display bucketing rather than thresholding `severity_score` yourself — the bucket boundaries may shift in future detection releases.
+
+---
+
+### 4.9 `GET /dashboard-summary` — Composed KPI overview
+
+Single request that returns aggregated totals, top stores by revenue, exception counts by severity, and a daily sales trend over a required date window. Designed for the portal's overview page so it renders with one round-trip.
+
+**Query parameters** (both required)
+
+| Param | Type | Description |
+|---|---|---|
+| `start_date` | `YYYY-MM-DD` | Start of the summary window (inclusive) |
+| `end_date` | `YYYY-MM-DD` | End of the summary window (inclusive) |
+
+**Responses**
+
+| Status | Condition |
+|---|---|
+| `200` | Summary returned |
+| `400` | `start_date` is after `end_date` (clear `detail` message) |
+| `422` | Either date is missing or malformed |
+
+**Response `200`**
+
+```json
+{
+  "start_date": "2026-01-01",
+  "end_date": "2026-01-31",
+  "total_sales": 18546721.42,
+  "total_transactions": 487234,
+  "average_labor_cost_pct": 0.1124,
+  "top_stores_by_revenue": [
+    { "store_id": 2, "total_sales": 3320145.10 },
+    { "store_id": 1, "total_sales": 2890432.55 },
+    { "store_id": 3, "total_sales": 2410988.30 },
+    { "store_id": 4, "total_sales": 1985441.05 },
+    { "store_id": 6, "total_sales": 1820772.18 }
+  ],
+  "exception_count_by_severity": [
+    { "severity_level": "info",     "count": 14 },
+    { "severity_level": "warning",  "count": 4 },
+    { "severity_level": "critical", "count": 1 }
+  ],
+  "daily_sales_trend": [
+    { "date": "2026-01-01", "total_sales": 612043.21, "transaction_count": 16002 },
+    { "date": "2026-01-02", "total_sales": 598320.55, "transaction_count": 15741 }
+  ]
+}
+```
+
+`top_stores_by_revenue` is capped at five entries, sorted descending. `exception_count_by_severity` always contains all three severity levels, even when one or more counts are zero — render the buckets unconditionally rather than hiding empty ones. `daily_sales_trend` contains exactly one entry per date in the window where any store had sales; missing days indicate no data, not zero sales.
+
+---
+
 ## 5. Recommended Request Patterns
 
 ### Dashboard overview page
@@ -388,6 +521,15 @@ Fields may be added to responses in a non-breaking way (new optional keys).
 Use flexible deserialization — ignore unknown fields rather than erroring on
 them.
 
+### Planned: `/contextual-insights`
+
+A future endpoint will join macroeconomic context (CPI, unemployment) onto
+Knot Shore performance — surfacing narratives like "exception rate during
+periods of elevated unemployment." Originally scoped for this release and
+deferred pending portal-side requirement clarification on which insights
+are actually useful in the dashboard. Build the data layer with this in
+mind but do not depend on it yet.
+
 ---
 
 ## 7. Interactive Documentation
@@ -399,3 +541,31 @@ While the API is running, full interactive docs are available:
 
 These are auto-generated from the code and always reflect the actual current
 API — use them to verify request/response shapes during development.
+
+---
+
+## 8. Demo Mode
+
+The API ships with a bundled demo dataset so it works out of the box on a
+fresh clone. The grocery endpoints (`/store-metrics`, `/anomalies`,
+`/dashboard-summary`) auto-detect their data source on every request:
+
+- **Live mode** — the operator has set `STORE_METRICS_PATH` and
+  `ANOMALY_FLAGS_PATH` to readable parquet files (typically the upstream
+  ETL's `data/processed/` output). The API serves real data.
+- **Demo mode** — those env vars are unset or unreadable. The API falls
+  back to bundled fixture parquets in `app/fixtures/`, logs a startup
+  WARNING, and reports `data_source: "fixtures"` on `/health`.
+
+The `data_source` field on `/health` is the authoritative signal of which
+mode is active. From a frontend perspective the JSON shape is identical in
+both modes — there is nothing the UI needs to switch on. The flag exists for
+operators debugging an unexpected `/health` payload, and as a safety check
+when verifying a deployment ("am I really pointing at the live ETL?").
+
+**The demo dataset is realistic but synthetic.** Roughly six months of data
+across eight Knot Shore-style stores with deterministic anomaly injections.
+Do not treat values from demo mode as production reference for any decision.
+
+Switching to live data is purely an operator concern: set the two env vars
+and restart the API. No frontend code change is required.
