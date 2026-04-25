@@ -11,7 +11,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import settings
 from app.core.logging_config import configure_logging
 from app.db.session import get_db
-from app.api.routes import series, metrics, insights, store_metrics
+from app.api.routes import series, metrics, insights, store_metrics, anomalies
 
 # Configure logging before the app object is used by anything else.
 configure_logging(settings.LOG_LEVEL)
@@ -73,6 +73,7 @@ app.include_router(series.router)
 app.include_router(metrics.router)
 app.include_router(insights.router)
 app.include_router(store_metrics.router)
+app.include_router(anomalies.router)
 
 
 # ---------------------------------------------------------------------------
