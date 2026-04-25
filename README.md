@@ -94,6 +94,8 @@ Liveness and readiness check. Pings the database with `SELECT 1`.
 
 `data_source` reports which grocery dataset the API is serving — `"live"` when `STORE_METRICS_PATH` and `ANOMALY_FLAGS_PATH` both point at readable parquet files, `"fixtures"` when the API has fallen back to the bundled demo dataset.
 
+The `db` and `data_source` fields are independent. `data_source` is computed from filesystem checks and populates correctly regardless of database availability, so a `503` response with `data_source: "fixtures"` still carries valid grocery-data signaling. In environments without a reachable PostgreSQL instance — local sandboxes, throwaway containers — `/health` will return `503` while the grocery endpoints (`/store-metrics`, `/anomalies`, `/dashboard-summary`) continue to serve correctly, since they read from parquet rather than the database.
+
 ---
 
 ### Series

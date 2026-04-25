@@ -61,6 +61,8 @@ GET /health
 | `data_source` | `"live"` or `"fixtures"` — see [section 8](#8-demo-mode) |
 | HTTP status | `200` (ok) or `503` (degraded) |
 
+`db` and `data_source` are independent signals. The HTTP status code reflects only the database probe; `data_source` is derived from filesystem checks and populates correctly even when the database is unavailable. The grocery endpoints (`/store-metrics`, `/anomalies`, `/dashboard-summary`) read from parquet rather than the database, so they continue to serve correctly during a `503`. Treat `db` as the gate for series/metrics/insights endpoints, and treat `data_source` as the gate for trusting grocery responses against live ETL output.
+
 ---
 
 ## 2. Data Conventions
