@@ -565,9 +565,15 @@ both modes — there is nothing the UI needs to switch on. The flag exists for
 operators debugging an unexpected `/health` payload, and as a safety check
 when verifying a deployment ("am I really pointing at the live ETL?").
 
-**The demo dataset is realistic but synthetic.** Roughly six months of data
-across eight Knot Shore-style stores with deterministic anomaly injections.
-Do not treat values from demo mode as production reference for any decision.
+**The demo dataset is real pipeline output.** It is a byte-identical
+snapshot of a 184-day canonical run of the upstream sim engine + ETL
+pipeline (2025-07-01 through 2025-12-31, eight Knot Shore-style stores).
+The sim engine generates synthetic store-day data, the ETL ingests it
+and runs anomaly detection, and the resulting parquets are committed to
+this repo as the bundled fixtures. Treat these values as representative
+of the response shape and dynamic range your UI must handle, but not as
+production reference for any business decision — the underlying
+operational data is itself synthetic.
 
 Switching to live data is purely an operator concern: set the two env vars
 and restart the API. No frontend code change is required.
