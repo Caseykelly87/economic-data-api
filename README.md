@@ -258,16 +258,16 @@ The API runs in one of two modes, automatically detected at request time:
 
 Demo mode is the default for fresh clones — the API works out of the box without any configuration.
 
-#### Regenerating bundled demo fixtures
+#### Refreshing bundled demo fixtures
 
-The fixtures in `app/fixtures/` are produced deterministically by `scripts/generate_demo_fixtures.py`. Run only after a deliberate change to demo data shape:
+The fixtures in `app/fixtures/` (`store_daily_metrics.parquet` and `anomaly_flags.parquet`) are byte-identical copies of the canonical pipeline output committed at `data/processed/canonical/` in the upstream `economic-data-etl` repository. They are produced by running the actual sim engine and ETL pipeline end-to-end against the canonical 184-day backfill window — they are not separately generated synthetic data.
 
-```bash
-venv/Scripts/python.exe scripts/generate_demo_fixtures.py    # Windows
-venv/bin/python scripts/generate_demo_fixtures.py            # POSIX
-```
+Current canonical contents:
 
-The script is seeded so successive runs produce byte-identical output. Both the script and its parquet outputs are committed.
+- `store_daily_metrics.parquet` — 1,472 rows × 6 columns; 8 stores × 184 days from 2025-07-01 through 2025-12-31
+- `anomaly_flags.parquet` — 453 rows × 9 columns; 438 info-severity, 15 warning-severity, 0 critical-severity
+
+To refresh: regenerate the canonical parquets in the upstream ETL repo (`scripts/build_canonical_fixtures.py` there), then copy the resulting files into this repo's `app/fixtures/` and commit. The upstream pipeline is byte-deterministic, so successive regenerations against the same window produce identical bytes.
 
 #### Planned: `GET /contextual-insights`
 
@@ -290,7 +290,7 @@ app/
 │   ├── store_metrics.py     # /store-metrics endpoint
 │   ├── anomalies.py         # /anomalies endpoint
 │   └── dashboard.py         # /dashboard-summary endpoint
-├── fixtures/                # Bundled demo parquets used when live paths unset
+├── fixtures/                # Bundled demo parquets (copies of upstream ETL canonical output)
 ├── models/economic.py       # SQLAlchemy ORM models (read-only, no migrations)
 ├── schemas/
 │   ├── economic.py          # Pydantic schemas for series/metrics/insights
@@ -300,7 +300,7 @@ app/
     └── grocery.py           # Parquet IO + aggregation for grocery endpoints
 
 scripts/
-└── generate_demo_fixtures.py  # Deterministic generator for app/fixtures/
+└── inspect_schema.py          # Ad-hoc DB schema inspection helper
 
 tests/
 ├── conftest.py              # Client fixture with mocked DB session
