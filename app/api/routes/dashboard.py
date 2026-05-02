@@ -1,9 +1,12 @@
 from datetime import date
 
+import structlog
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas.grocery import DashboardSummaryOut
 from app.services import grocery as svc
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/dashboard-summary", tags=["dashboard"])
 
@@ -17,6 +20,11 @@ def get_dashboard_summary(
     top-store rankings, exception counts by severity, and a daily
     sales trend across the supplied date range."""
     if start_date > end_date:
+        logger.warning(
+            "dashboard_invalid_date_range",
+            start_date=str(start_date),
+            end_date=str(end_date),
+        )
         raise HTTPException(
             status_code=400,
             detail="start_date must be on or before end_date.",

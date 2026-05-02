@@ -38,7 +38,8 @@ cp .env.example .env
 | `API_ENV` | No | `development` | Environment label |
 | `API_TITLE` | No | `Economic Data API` | Title shown in docs |
 | `API_VERSION` | No | `1.0.0` | Version shown in docs |
-| `LOG_LEVEL` | No | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `LOG_LEVEL` | No | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) |
+| `LOG_FORMAT` | No | auto | `console` (colored text) or `json`. Auto-detects: console when stdout is a tty, json when piped or redirected. |
 | `STORE_METRICS_PATH` | No | — | Path to live `store_daily_metrics.parquet` from the upstream ETL. Falls back to bundled fixtures if unset or unreadable. |
 | `ANOMALY_FLAGS_PATH` | No | — | Path to live `anomaly_flags.parquet` from the upstream ETL. Falls back to bundled fixtures if unset or unreadable. |
 | `GROCERY_FIXTURES_DIR` | No | `app/fixtures` | Directory where bundled demo parquets live. Used as the fallback source. |
@@ -54,6 +55,62 @@ uvicorn app.main:app --reload
 - API: `http://localhost:8000`
 - Interactive docs (Swagger UI): `http://localhost:8000/docs`
 - Alternative docs (ReDoc): `http://localhost:8000/redoc`
+
+---
+
+## Logging
+
+The API emits structured logs via [structlog](https://www.structlog.org/).
+Output is human-readable colored text when stdout is a tty, single-line
+JSON otherwise. Format and verbosity can be controlled via environment
+variables:
+
+| Variable | Values | Default |
+|---|---|---|
+| `LOG_LEVEL` | `debug`, `info`, `warning`, `error`, `critical` | `info` |
+| `LOG_FORMAT` | `console`, `json` | auto (console if tty, else json) |
+
+### Request correlation
+
+Every inbound HTTP request is tagged with a UUID. The middleware:
+
+- Generates a UUID per request, OR uses the value of the incoming
+  `X-Request-ID` header if the caller provides one.
+- Binds the ID to structlog's contextvars so every log line emitted
+  during the request lifetime includes a `request_id` field.
+- Echoes the ID on the response's `X-Request-ID` header so callers
+  can correlate from their side.
+
+Example: when the portal calls `/store-metrics`, it can pass
+`X-Request-ID: <its-own-id>` and the API's logs for that request will
+show the same `request_id`, making it possible to trace one user's
+flow across portal logs and API logs by grepping for one UUID.
+
+### Output examples
+
+Console mode (default in a terminal):
+
+```
+2025-12-31T17:34:42.118Z [info     ] request_handled                request_id=8c3f... method=GET path=/store-metrics status_code=200 duration_ms=12.4
+```
+
+JSON mode (default when piped, or when `LOG_FORMAT=json`):
+
+```json
+{"event": "request_handled", "request_id": "8c3f...", "method": "GET", "path": "/store-metrics", "status_code": 200, "duration_ms": 12.4, "level": "info", "timestamp": "2025-12-31T17:34:42.118Z"}
+```
+
+To run with debug-level logs:
+
+```bash
+LOG_LEVEL=debug uvicorn app.main:app --port 8000
+```
+
+To capture structured logs for offline analysis:
+
+```bash
+LOG_FORMAT=json uvicorn app.main:app --port 8000 > api.log 2>&1
+```
 
 ---
 
