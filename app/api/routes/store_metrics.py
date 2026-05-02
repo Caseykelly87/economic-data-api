@@ -1,9 +1,12 @@
 from datetime import date
 
+import structlog
 from fastapi import APIRouter, Query
 
 from app.schemas.grocery import PaginatedStoreMetricsOut
 from app.services import grocery as svc
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/store-metrics", tags=["store-metrics"])
 

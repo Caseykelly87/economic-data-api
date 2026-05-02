@@ -1,10 +1,13 @@
 from datetime import date
 from typing import Literal
 
+import structlog
 from fastapi import APIRouter, Query
 
 from app.schemas.grocery import PaginatedAnomaliesOut
 from app.services import grocery as svc
+
+logger = structlog.get_logger(__name__)
 
 SeverityLiteral = Literal["info", "warning", "critical"]
 RuleLiteral = Literal["revenue_band", "labor_pct_band", "transactions_band"]

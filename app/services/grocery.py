@@ -5,6 +5,7 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
+import structlog
 
 from app.core.config import settings
 from app.schemas.grocery import (
@@ -19,6 +20,8 @@ from app.schemas.grocery import (
 
 SEVERITY_LEVELS = ("info", "warning", "critical")
 
+logger = structlog.get_logger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Parquet loaders
@@ -31,6 +34,11 @@ def load_store_metrics_df() -> pd.DataFrame:
         raise FileNotFoundError(
             f"store_daily_metrics parquet not found at '{path}'."
         )
+    logger.debug(
+        "loading_dataframe",
+        source="store_metrics",
+        path=str(path),
+    )
     return pd.read_parquet(path)
 
 
@@ -41,6 +49,11 @@ def load_anomaly_flags_df() -> pd.DataFrame:
         raise FileNotFoundError(
             f"anomaly_flags parquet not found at '{path}'."
         )
+    logger.debug(
+        "loading_dataframe",
+        source="anomaly_flags",
+        path=str(path),
+    )
     return pd.read_parquet(path)
 
 
@@ -65,6 +78,15 @@ def get_store_metrics(
     offset: int = 0,
 ) -> tuple[int, list[StoreMetricOut]]:
     """Return (total, page) of store_daily_metrics rows after filters."""
+    logger.info(
+        "service_call_started",
+        service="get_store_metrics",
+        start_date=str(start_date) if start_date else None,
+        end_date=str(end_date) if end_date else None,
+        store_id=store_id,
+        limit=limit,
+        offset=offset,
+    )
     df = load_store_metrics_df()
     df = _filter_dates(df, start_date, end_date)
     if store_id is not None:
@@ -72,11 +94,23 @@ def get_store_metrics(
 
     total = int(len(df))
     if total == 0:
+        logger.info(
+            "service_call_completed",
+            service="get_store_metrics",
+            total=0,
+            returned=0,
+        )
         return 0, []
 
     df = df.sort_values(["date", "store_id"]).reset_index(drop=True)
     page = df.iloc[offset : offset + limit]
     items = [StoreMetricOut.model_validate(r) for r in page.to_dict(orient="records")]
+    logger.info(
+        "service_call_completed",
+        service="get_store_metrics",
+        total=total,
+        returned=len(items),
+    )
     return total, items
 
 
@@ -95,6 +129,17 @@ def get_anomalies(
     offset: int = 0,
 ) -> tuple[int, list[AnomalyFlagOut]]:
     """Return (total, page) of anomaly_flags rows after filters."""
+    logger.info(
+        "service_call_started",
+        service="get_anomalies",
+        start_date=str(start_date) if start_date else None,
+        end_date=str(end_date) if end_date else None,
+        store_id=store_id,
+        severity_level=severity_level,
+        rule_id=rule_id,
+        limit=limit,
+        offset=offset,
+    )
     df = load_anomaly_flags_df()
     df = _filter_dates(df, start_date, end_date)
     if store_id is not None:
@@ -106,11 +151,23 @@ def get_anomalies(
 
     total = int(len(df))
     if total == 0:
+        logger.info(
+            "service_call_completed",
+            service="get_anomalies",
+            total=0,
+            returned=0,
+        )
         return 0, []
 
     df = df.sort_values(["date", "store_id", "rule_id"]).reset_index(drop=True)
     page = df.iloc[offset : offset + limit]
     items = [AnomalyFlagOut.model_validate(r) for r in page.to_dict(orient="records")]
+    logger.info(
+        "service_call_completed",
+        service="get_anomalies",
+        total=total,
+        returned=len(items),
+    )
     return total, items
 
 
@@ -125,6 +182,12 @@ def get_dashboard_summary(
 ) -> DashboardSummaryOut:
     """Compose KPI totals, top-store rankings, severity counts, and
     daily sales trend into a single response."""
+    logger.info(
+        "service_call_started",
+        service="get_dashboard_summary",
+        start_date=str(start_date),
+        end_date=str(end_date),
+    )
     metrics = load_store_metrics_df()
     flags = load_anomaly_flags_df()
 
@@ -176,6 +239,14 @@ def get_dashboard_summary(
         for lvl in SEVERITY_LEVELS
     ]
 
+    logger.info(
+        "service_call_completed",
+        service="get_dashboard_summary",
+        total_sales=total_sales,
+        total_transactions=total_transactions,
+        top_store_count=len(top_stores),
+        trend_points=len(trend),
+    )
     return DashboardSummaryOut(
         start_date=start_date,
         end_date=end_date,

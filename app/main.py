@@ -1,6 +1,8 @@
 import logging
 import time
+import uuid
 
+import structlog
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -16,8 +18,8 @@ from app.api.routes import series, metrics, insights, store_metrics, anomalies, 
 # Configure logging before the app object is used by anything else.
 configure_logging(settings.LOG_LEVEL)
 
-logger = logging.getLogger(__name__)
-request_logger = logging.getLogger("api.requests")
+logger = structlog.get_logger(__name__)
+request_logger = structlog.get_logger("api.requests")
 
 # ---------------------------------------------------------------------------
 # Application
@@ -36,19 +38,43 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    """Log method, path, status code, and elapsed time for every request."""
+    """
+    Per-request boundary logging with request correlation IDs.
+
+    On entry: generate a UUID for the request (or accept one from the
+    incoming X-Request-ID header if present) and bind it to structlog
+    contextvars so every log line emitted during the request lifetime
+    automatically includes request_id=<uuid>.
+
+    On exit: log method, path, status code, and elapsed time as a
+    structured event. Echo the request ID on the response's own
+    X-Request-ID header. Clear contextvars so the next request starts
+    fresh.
+    """
 
     async def dispatch(self, request: Request, call_next):
+        incoming = request.headers.get("X-Request-ID")
+        request_id = incoming if incoming else str(uuid.uuid4())
+
+        structlog.contextvars.clear_contextvars()
+        structlog.contextvars.bind_contextvars(request_id=request_id)
+
         start = time.perf_counter()
-        response = await call_next(request)
-        ms = (time.perf_counter() - start) * 1000
+        try:
+            response = await call_next(request)
+        finally:
+            duration_ms = (time.perf_counter() - start) * 1000
+
         request_logger.info(
-            "%s %s → %d  (%.1f ms)",
-            request.method,
-            request.url.path,
-            response.status_code,
-            ms,
+            "request_handled",
+            method=request.method,
+            path=request.url.path,
+            status_code=response.status_code,
+            duration_ms=round(duration_ms, 1),
         )
+
+        response.headers["X-Request-ID"] = request_id
+        structlog.contextvars.clear_contextvars()
         return response
 
 
@@ -85,14 +111,15 @@ app.include_router(dashboard.router)
 # serving fixture data.
 if settings.grocery_data_source == "fixtures":
     logger.warning(
-        "STORE_METRICS_PATH and/or ANOMALY_FLAGS_PATH unset or unreadable. "
-        "Serving bundled demo fixtures from %s. Set both env vars to use "
-        "live ETL output.",
-        settings.GROCERY_FIXTURES_DIR,
+        "grocery_data_source_fallback",
+        data_source="fixtures",
+        fixtures_dir=str(settings.GROCERY_FIXTURES_DIR),
+        reason="STORE_METRICS_PATH and/or ANOMALY_FLAGS_PATH unset or unreadable",
     )
 else:
     logger.info(
-        "Grocery data source: live (STORE_METRICS_PATH and ANOMALY_FLAGS_PATH configured)."
+        "grocery_data_source_live",
+        data_source="live",
     )
 
 
@@ -114,8 +141,13 @@ def health_check(db: Session = Depends(get_db)):
         db_status = "connected"
         http_status = 200
         api_status = "ok"
-    except Exception:
-        logger.warning("Database health check failed", exc_info=True)
+    except Exception as exc:
+        logger.warning(
+            "health_db_check_failed",
+            error=str(exc),
+            error_type=type(exc).__name__,
+            exc_info=True,
+        )
         db_status = "unavailable"
         http_status = 503
         api_status = "degraded"
@@ -138,7 +170,12 @@ def health_check(db: Session = Depends(get_db)):
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.error(
-        "Unhandled error on %s %s: %s", request.method, request.url, exc, exc_info=True
+        "unhandled_exception",
+        method=request.method,
+        path=str(request.url.path),
+        error=str(exc),
+        error_type=type(exc).__name__,
+        exc_info=True,
     )
     return JSONResponse(
         status_code=500,
