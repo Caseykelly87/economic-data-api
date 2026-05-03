@@ -6,12 +6,14 @@ import structlog
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
 from app.core.logging_config import configure_logging
+from app.core import metrics as _metrics  # noqa: F401  # register custom counters with the prometheus default registry at startup
 from app.db.session import get_db
 from app.api.routes import series, metrics, insights, store_metrics, anomalies, dashboard
 
@@ -90,6 +92,11 @@ app.add_middleware(
     allow_methods=["GET"],     # read-only API
     allow_headers=["*"],
 )
+
+# Auto-instrument HTTP request metrics and expose /metrics. Must be
+# called after middleware setup; the instrumentator hooks into the
+# FastAPI dispatch chain at this point.
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 # ---------------------------------------------------------------------------
 # Routers
