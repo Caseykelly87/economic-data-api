@@ -100,6 +100,7 @@ def configure_logging(level: str | None = "INFO") -> None:
         structlog.stdlib.add_log_level,
         _add_logger_name_safe,
         structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.stdlib.ExtraAdder(),
         timestamper,
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
