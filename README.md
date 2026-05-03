@@ -114,6 +114,69 @@ LOG_FORMAT=json uvicorn app.main:app --port 8000 > api.log 2>&1
 
 ---
 
+## Metrics
+
+The API exposes a `/metrics` endpoint in Prometheus text format. Any
+Prometheus-compatible scraper can poll this endpoint to collect
+time-series data on request rates, latencies, and custom counters.
+
+```bash
+curl http://localhost:8000/metrics
+```
+
+### Auto-instrumented HTTP metrics
+
+The [prometheus-fastapi-instrumentator](https://github.com/trallnag/prometheus-fastapi-instrumentator)
+library produces three standard metrics for every route:
+
+| Metric | Type | Labels |
+|---|---|---|
+| `http_requests_total` | Counter | `method`, `handler`, `status` |
+| `http_request_duration_seconds` | Histogram | `method`, `handler` |
+| `http_requests_inprogress` | Gauge | `method`, `handler` |
+
+### Custom counters
+
+Two custom counters track operational facts specific to the grocery
+endpoints:
+
+| Metric | Type | Labels | Description |
+|---|---|---|---|
+| `grocery_data_source_total` | Counter | `source` | Increments per grocery request. `source` is `fixtures` or `live` based on `STORE_METRICS_PATH` and `ANOMALY_FLAGS_PATH` configuration. |
+| `service_call_total` | Counter | `service` | Increments per grocery service-layer call. `service` is one of `get_store_metrics`, `get_anomalies`, `get_dashboard_summary`. |
+
+Both counters increment at the same call sites as the corresponding
+structured log events (`service_call_started` and
+`service_call_completed`). Logs give per-call detail; metrics give
+aggregate rates.
+
+### Example output
+
+```
+# HELP http_requests_total Total number of requests by method, status and handler.
+# TYPE http_requests_total counter
+http_requests_total{handler="/store-metrics",method="GET",status="2xx"} 5.0
+
+# HELP grocery_data_source_total Number of grocery requests served, labeled by data source.
+# TYPE grocery_data_source_total counter
+grocery_data_source_total{source="fixtures"} 5.0
+
+# HELP service_call_total Number of grocery service function calls, labeled by service name.
+# TYPE service_call_total counter
+service_call_total{service="get_store_metrics"} 3.0
+service_call_total{service="get_anomalies"} 1.0
+service_call_total{service="get_dashboard_summary"} 1.0
+```
+
+### Authentication
+
+The `/metrics` endpoint is unauthenticated. Production deployments
+should restrict access via firewall rules, an authenticating reverse
+proxy, or a service mesh — Prometheus convention is metrics endpoints
+sit inside trusted networks.
+
+---
+
 ## Testing
 
 Tests mock the service layer and do not require a database connection.

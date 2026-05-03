@@ -8,6 +8,7 @@ import pandas as pd
 import structlog
 
 from app.core.config import settings
+from app.core.metrics import grocery_data_source_total, service_call_total
 from app.schemas.grocery import (
     AnomalyFlagOut,
     DailySalesPoint,
@@ -87,6 +88,8 @@ def get_store_metrics(
         limit=limit,
         offset=offset,
     )
+    service_call_total.labels(service="get_store_metrics").inc()
+    grocery_data_source_total.labels(source=settings.grocery_data_source).inc()
     df = load_store_metrics_df()
     df = _filter_dates(df, start_date, end_date)
     if store_id is not None:
@@ -140,6 +143,8 @@ def get_anomalies(
         limit=limit,
         offset=offset,
     )
+    service_call_total.labels(service="get_anomalies").inc()
+    grocery_data_source_total.labels(source=settings.grocery_data_source).inc()
     df = load_anomaly_flags_df()
     df = _filter_dates(df, start_date, end_date)
     if store_id is not None:
@@ -188,6 +193,8 @@ def get_dashboard_summary(
         start_date=str(start_date),
         end_date=str(end_date),
     )
+    service_call_total.labels(service="get_dashboard_summary").inc()
+    grocery_data_source_total.labels(source=settings.grocery_data_source).inc()
     metrics = load_store_metrics_df()
     flags = load_anomaly_flags_df()
 

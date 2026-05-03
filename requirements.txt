@@ -6,6 +6,7 @@ pydantic==2.10.3
 pydantic-settings==2.7.0
 python-dotenv==1.0.1
 structlog>=24.0
+prometheus-fastapi-instrumentator>=7.0
 
 # Parquet IO for grocery endpoints (read-only, served via app/services/grocery.py)
 pandas==2.2.3
