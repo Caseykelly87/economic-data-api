@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.core.logging_config import configure_logging
 from app.core import metrics as _metrics  # noqa: F401  # register custom counters with the prometheus default registry at startup
 from app.db.session import get_db
-from app.api.routes import series, metrics, insights, store_metrics, anomalies, dashboard
+from app.api.routes import series, metrics, insights, store_metrics, anomalies, dashboard, department_metrics
 
 # Configure logging before the app object is used by anything else.
 configure_logging(settings.LOG_LEVEL)
@@ -108,6 +108,7 @@ app.include_router(insights.router)
 app.include_router(store_metrics.router)
 app.include_router(anomalies.router)
 app.include_router(dashboard.router)
+app.include_router(department_metrics.router)
 
 
 # ---------------------------------------------------------------------------
