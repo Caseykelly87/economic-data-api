@@ -13,6 +13,7 @@ from app.schemas.grocery import (
     AnomalyFlagOut,
     DailySalesPoint,
     DashboardSummaryOut,
+    DepartmentMetricOut,
     SeverityCount,
     StoreMetricOut,
     StoreRevenueRank,
@@ -53,6 +54,21 @@ def load_anomaly_flags_df() -> pd.DataFrame:
     logger.debug(
         "loading_dataframe",
         source="anomaly_flags",
+        path=str(path),
+    )
+    return pd.read_parquet(path)
+
+
+def load_department_metrics_df() -> pd.DataFrame:
+    """Read the resolved department_daily_metrics parquet into a DataFrame."""
+    path = settings.resolved_department_metrics_path
+    if not Path(path).is_file():
+        raise FileNotFoundError(
+            f"department_daily_metrics parquet not found at '{path}'."
+        )
+    logger.debug(
+        "loading_dataframe",
+        source="department_metrics",
         path=str(path),
     )
     return pd.read_parquet(path)
@@ -264,3 +280,58 @@ def get_dashboard_summary(
         exception_count_by_severity=exception_counts,
         daily_sales_trend=trend,
     )
+
+
+# ---------------------------------------------------------------------------
+# /department-metrics
+# ---------------------------------------------------------------------------
+
+def get_department_metrics(
+    *,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    store_id: int | None = None,
+    department_id: int | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[int, list[DepartmentMetricOut]]:
+    """Return (total, page) of department_daily_metrics rows after filters."""
+    logger.info(
+        "service_call_started",
+        service="get_department_metrics",
+        start_date=str(start_date) if start_date else None,
+        end_date=str(end_date) if end_date else None,
+        store_id=store_id,
+        department_id=department_id,
+        limit=limit,
+        offset=offset,
+    )
+    service_call_total.labels(service="get_department_metrics").inc()
+    grocery_data_source_total.labels(source=settings.grocery_data_source).inc()
+    df = load_department_metrics_df()
+    df = _filter_dates(df, start_date, end_date)
+    if store_id is not None:
+        df = df[df["store_id"] == store_id]
+    if department_id is not None:
+        df = df[df["department_id"] == department_id]
+
+    total = int(len(df))
+    if total == 0:
+        logger.info(
+            "service_call_completed",
+            service="get_department_metrics",
+            total=0,
+            returned=0,
+        )
+        return 0, []
+
+    df = df.sort_values(["date", "store_id", "department_id"]).reset_index(drop=True)
+    page = df.iloc[offset : offset + limit]
+    items = [DepartmentMetricOut.model_validate(r) for r in page.to_dict(orient="records")]
+    logger.info(
+        "service_call_completed",
+        service="get_department_metrics",
+        total=total,
+        returned=len(items),
+    )
+    return total, items

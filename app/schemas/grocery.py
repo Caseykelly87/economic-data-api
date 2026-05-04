@@ -26,6 +26,29 @@ class PaginatedStoreMetricsOut(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# department_daily_metrics rows
+# ---------------------------------------------------------------------------
+
+class DepartmentMetricOut(BaseModel):
+    date: date
+    store_id: int
+    department_id: int
+    net_sales: float
+    transactions: int
+    units_sold: int
+    gross_margin_pct: float
+
+    model_config = {"from_attributes": True}
+
+
+class PaginatedDepartmentMetricsOut(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    items: list[DepartmentMetricOut]
+
+
+# ---------------------------------------------------------------------------
 # anomaly_flags rows
 # ---------------------------------------------------------------------------
 
