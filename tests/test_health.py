@@ -55,10 +55,13 @@ def test_health_data_source_is_fixtures_by_default(client):
 def test_health_data_source_is_live_when_paths_exist(client, tmp_path):
     metrics = tmp_path / "store_daily_metrics.parquet"
     flags = tmp_path / "anomaly_flags.parquet"
+    departments = tmp_path / "department_daily_metrics.parquet"
     metrics.write_bytes(b"")
     flags.write_bytes(b"")
+    departments.write_bytes(b"")
     from app.core.config import settings
     with patch.object(settings, "STORE_METRICS_PATH", str(metrics)), \
-         patch.object(settings, "ANOMALY_FLAGS_PATH", str(flags)):
+         patch.object(settings, "ANOMALY_FLAGS_PATH", str(flags)), \
+         patch.object(settings, "DEPARTMENT_METRICS_PATH", str(departments)):
         data = client.get("/health").json()
     assert data["data_source"] == "live"
