@@ -355,7 +355,7 @@ Pre-aggregated snapshot of all key indicators from `public_analytics.mart_econom
 
 ### Grocery Data Endpoints
 
-Three endpoints expose the upstream ETL's parquet outputs (`store_daily_metrics`, `anomaly_flags`) as JSON. They power the Knot Shore portal's KPI overview, exception list, and store-detail views.
+Four endpoints expose the upstream ETL's parquet outputs (`store_daily_metrics`, `anomaly_flags`, `department_daily_metrics`) as JSON. They power the Knot Shore portal's KPI overview, exception list, store-detail, and store-drilldown views.
 
 #### `GET /store-metrics`
 
@@ -369,23 +369,67 @@ Paginated detection flags. Filterable by `start_date`, `end_date`, `store_id`, `
 
 Single-shot KPI overview over a required `start_date`/`end_date` window: total sales, total transactions, average labor pct, top-5 stores by revenue, exception counts by severity (always all three levels reported, including zero counts), and a daily sales trend series.
 
+#### `GET /department-metrics`
+
+Paginated department-grain rows at the store-day-department grain. Filterable by `start_date`, `end_date`, `store_id` (1–8), and `department_id` (1–10). Same envelope as `/store-metrics`. The canonical fixture covers 2025-07-01 through 2025-12-31 across 8 stores and 10 departments (14,706 rows).
+
+Query parameters:
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `start_date` | date (YYYY-MM-DD) | none | Filter rows on or after this date |
+| `end_date` | date (YYYY-MM-DD) | none | Filter rows on or before this date |
+| `store_id` | int (1–8) | none | Filter to a single store |
+| `department_id` | int (1–10) | none | Filter to a single department |
+| `limit` | int (1–200) | 50 | Number of rows to return |
+| `offset` | int (≥0) | 0 | Number of rows to skip |
+
+Example:
+
+```bash
+# All departments at store 3 for July 2025
+curl -s "http://localhost:8000/department-metrics?store_id=3&start_date=2025-07-01&end_date=2025-07-31"
+```
+
+Response:
+
+```json
+{
+  "total": 310,
+  "limit": 50,
+  "offset": 0,
+  "items": [
+    {
+      "date": "2025-07-01",
+      "store_id": 3,
+      "department_id": 1,
+      "net_sales": 9847.22,
+      "transactions": 252,
+      "units_sold": 814,
+      "gross_margin_pct": 0.46
+    }
+  ]
+}
+```
+
 #### Live mode vs demo mode
 
 The API runs in one of two modes, automatically detected at request time:
 
-- **Live** — `STORE_METRICS_PATH` and `ANOMALY_FLAGS_PATH` env vars both point at readable parquet files (typically the ETL's `data/processed/` output). `/health` reports `data_source: "live"`.
-- **Demo** — the env vars are unset or point at unreadable paths. The API serves the bundled fixture parquets at `app/fixtures/`. The startup log prints a WARNING and `/health` reports `data_source: "fixtures"`.
+- **Live** — `STORE_METRICS_PATH`, `ANOMALY_FLAGS_PATH`, and `DEPARTMENT_METRICS_PATH` env vars all point at readable parquet files (typically the ETL's `data/processed/` output). `/health` reports `data_source: "live"`.
+- **Demo** — one or more of the env vars are unset or point at unreadable paths. The API serves the bundled fixture parquets at `app/fixtures/`. The startup log prints a WARNING and `/health` reports `data_source: "fixtures"`.
 
 Demo mode is the default for fresh clones — the API works out of the box without any configuration.
 
 #### Refreshing bundled demo fixtures
 
-The fixtures in `app/fixtures/` (`store_daily_metrics.parquet` and `anomaly_flags.parquet`) are byte-identical copies of the canonical pipeline output committed at `data/processed/canonical/` in the upstream `economic-data-etl` repository. They are produced by running the actual sim engine and ETL pipeline end-to-end against the canonical 184-day backfill window — they are not separately generated synthetic data.
+The fixtures in `app/fixtures/` (`store_daily_metrics.parquet`, `anomaly_flags.parquet`, `department_daily_metrics.parquet`) are byte-identical copies of the canonical pipeline output committed at `data/processed/canonical/` in the upstream `economic-data-etl` repository. They are produced by running the actual sim engine and ETL pipeline end-to-end against the canonical 184-day backfill window — they are not separately generated synthetic data.
 
 Current canonical contents:
 
 - `store_daily_metrics.parquet` — 1,472 rows × 6 columns; 8 stores × 184 days from 2025-07-01 through 2025-12-31
 - `anomaly_flags.parquet` — 453 rows × 9 columns; 438 info-severity, 15 warning-severity, 0 critical-severity
+- `department_daily_metrics.parquet` — 14,706 rows × 7 columns; 8 stores × 10 departments × 184 days from 2025-07-01 through 2025-12-31
 
 To refresh: regenerate the canonical parquets in the upstream ETL repo (`scripts/build_canonical_fixtures.py` there), then copy the resulting files into this repo's `app/fixtures/` and commit. The upstream pipeline is byte-deterministic, so successive regenerations against the same window produce identical bytes.
 
@@ -409,7 +453,8 @@ app/
 │   ├── insights.py          # /insights endpoints
 │   ├── store_metrics.py     # /store-metrics endpoint
 │   ├── anomalies.py         # /anomalies endpoint
-│   └── dashboard.py         # /dashboard-summary endpoint
+│   ├── dashboard.py         # /dashboard-summary endpoint
+│   └── department_metrics.py # /department-metrics endpoint
 ├── fixtures/                # Bundled demo parquets (copies of upstream ETL canonical output)
 ├── models/economic.py       # SQLAlchemy ORM models (read-only, no migrations)
 ├── schemas/
