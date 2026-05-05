@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     STORE_METRICS_PATH: str | None = None
     ANOMALY_FLAGS_PATH: str | None = None
     DEPARTMENT_METRICS_PATH: str | None = None
+    DIM_STORES_PATH: str | None = None
     GROCERY_FIXTURES_DIR: str = "app/fixtures"
 
     @property
@@ -64,13 +65,22 @@ class Settings(BaseSettings):
         return f"{self.GROCERY_FIXTURES_DIR}/department_daily_metrics.parquet"
 
     @property
+    def resolved_dim_stores_path(self) -> str:
+        """Live DIM_STORES_PATH if it points at a readable file, else
+        the bundled fixture."""
+        if self.DIM_STORES_PATH and Path(self.DIM_STORES_PATH).is_file():
+            return self.DIM_STORES_PATH
+        return f"{self.GROCERY_FIXTURES_DIR}/dim_stores.parquet"
+
+    @property
     def grocery_data_source(self) -> str:
-        """'live' if all three configured paths exist, 'fixtures' otherwise.
+        """'live' if all four configured paths exist, 'fixtures' otherwise.
         Reported by /health and logged at startup."""
         live_metrics = bool(self.STORE_METRICS_PATH) and Path(self.STORE_METRICS_PATH).is_file()
         live_flags = bool(self.ANOMALY_FLAGS_PATH) and Path(self.ANOMALY_FLAGS_PATH).is_file()
         live_departments = bool(self.DEPARTMENT_METRICS_PATH) and Path(self.DEPARTMENT_METRICS_PATH).is_file()
-        return "live" if (live_metrics and live_flags and live_departments) else "fixtures"
+        live_dim_stores = bool(self.DIM_STORES_PATH) and Path(self.DIM_STORES_PATH).is_file()
+        return "live" if (live_metrics and live_flags and live_departments and live_dim_stores) else "fixtures"
 
 
 settings = Settings()

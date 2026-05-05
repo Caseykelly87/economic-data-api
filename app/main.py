@@ -122,7 +122,7 @@ if settings.grocery_data_source == "fixtures":
         "grocery_data_source_fallback",
         data_source="fixtures",
         fixtures_dir=str(settings.GROCERY_FIXTURES_DIR),
-        reason="STORE_METRICS_PATH, ANOMALY_FLAGS_PATH, and/or DEPARTMENT_METRICS_PATH unset or unreadable",
+        reason="STORE_METRICS_PATH, ANOMALY_FLAGS_PATH, DEPARTMENT_METRICS_PATH, and/or DIM_STORES_PATH unset or unreadable",
     )
 else:
     logger.info(
