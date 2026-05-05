@@ -49,6 +49,25 @@ class PaginatedDepartmentMetricsOut(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# dim_stores rows
+# ---------------------------------------------------------------------------
+
+class StoreDimensionOut(BaseModel):
+    store_id: int
+    store_name: str
+    address: str
+    city: str
+    zip: str  # 5-character zero-padded string; coerced from int64 in service layer
+    county_fips: str  # 5-character zero-padded string; coerced from int64 in service layer
+    trade_area_profile: str
+    sqft: int
+    open_date: date
+    base_daily_revenue: float
+
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
 # anomaly_flags rows
 # ---------------------------------------------------------------------------
 

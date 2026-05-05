@@ -15,6 +15,7 @@ from app.schemas.grocery import (
     DashboardSummaryOut,
     DepartmentMetricOut,
     SeverityCount,
+    StoreDimensionOut,
     StoreMetricOut,
     StoreRevenueRank,
 )
@@ -69,6 +70,21 @@ def load_department_metrics_df() -> pd.DataFrame:
     logger.debug(
         "loading_dataframe",
         source="department_metrics",
+        path=str(path),
+    )
+    return pd.read_parquet(path)
+
+
+def load_dim_stores_df() -> pd.DataFrame:
+    """Read the resolved dim_stores parquet into a DataFrame."""
+    path = settings.resolved_dim_stores_path
+    if not Path(path).is_file():
+        raise FileNotFoundError(
+            f"dim_stores parquet not found at '{path}'."
+        )
+    logger.debug(
+        "loading_dataframe",
+        source="dim_stores",
         path=str(path),
     )
     return pd.read_parquet(path)
@@ -335,3 +351,49 @@ def get_department_metrics(
         returned=len(items),
     )
     return total, items
+
+
+# ---------------------------------------------------------------------------
+# /dim-stores
+# ---------------------------------------------------------------------------
+
+def get_dim_stores() -> list[StoreDimensionOut]:
+    """Return all 8 store dimension rows.
+
+    Coerces zip and county_fips from the parquet's int64 storage to
+    5-character zero-padded strings (api consumers see them as
+    identifiers, not numbers; round-trips correctly for entries with
+    leading zeros). Coerces open_date from the parquet's string
+    storage to a typed date.
+    """
+    logger.info("service_call_started", service="get_dim_stores")
+    service_call_total.labels(service="get_dim_stores").inc()
+    grocery_data_source_total.labels(source=settings.grocery_data_source).inc()
+
+    df = load_dim_stores_df()
+    df = df.sort_values("store_id").reset_index(drop=True)
+
+    items: list[StoreDimensionOut] = []
+    for row in df.to_dict(orient="records"):
+        items.append(
+            StoreDimensionOut(
+                store_id=int(row["store_id"]),
+                store_name=str(row["store_name"]),
+                address=str(row["address"]),
+                city=str(row["city"]),
+                zip=f"{int(row['zip']):05d}",
+                county_fips=f"{int(row['county_fips']):05d}",
+                trade_area_profile=str(row["trade_area_profile"]),
+                sqft=int(row["sqft"]),
+                open_date=date.fromisoformat(str(row["open_date"])),
+                base_daily_revenue=float(row["base_daily_revenue"]),
+            )
+        )
+
+    logger.info(
+        "service_call_completed",
+        service="get_dim_stores",
+        total=len(items),
+        returned=len(items),
+    )
+    return items
