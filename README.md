@@ -1,6 +1,16 @@
 # Economic Data API
 
-A read-only REST API that exposes economic time-series data stored in PostgreSQL. Built with FastAPI and SQLAlchemy, designed as the query layer of a multi-service data platform. The upstream ETL pipeline owns all data ingestion and schema management — this service only reads.
+A read-only REST API that exposes economic time-series data and grocery analytics. Built with FastAPI and SQLAlchemy. The macro side reads from Postgres (the upstream `economic-data-etl` repo's load target); the grocery side reads from parquet files (also produced by `economic-data-etl`). The service is one of four repositories in the Knot Shore Grocery analytics platform — it sits between the ETL pipeline and the consumer-facing portal.
+
+## Where this fits in the platform
+
+```
+knot-shore-grocery-simulation-engine    →    economic-data-etl    →    economic-data-api    →    knot-shore-portal
+sim data generator                           ingestion + detection      this repo                  dashboards
+                                                                       (service layer)             + docs hub
+```
+
+Reader-grade documentation for this API — endpoint contracts, dual-mode operation, observability stack — lives at the portal's [`/about/api`](https://github.com/Caseykelly87/knot-shore-portal) page. The platform-wide architectural narrative is at [`/about/architecture`](https://github.com/Caseykelly87/knot-shore-portal); decision records (including the `resolved_*_path` pattern, the 200-row pagination cap, the schema discipline) are at [`/about/decisions`](https://github.com/Caseykelly87/knot-shore-portal).
 
 ## Stack
 
@@ -10,8 +20,10 @@ A read-only REST API that exposes economic time-series data stored in PostgreSQL
 | Web framework | FastAPI |
 | ORM | SQLAlchemy 2.0 (read-only) |
 | Validation | Pydantic v2 |
-| Database | PostgreSQL (AWS RDS) |
-| Testing | Pytest + httpx |
+| Database | PostgreSQL (macro side) |
+| Parquet IO | pandas + pyarrow (grocery side) |
+| Observability | structlog, prometheus-fastapi-instrumentator |
+| Testing | pytest + httpx |
 
 ---
 
@@ -30,7 +42,7 @@ cp .env.example .env
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `DB_HOST` | Yes | — | PostgreSQL host |
+| `DB_HOST` | Yes | — | PostgreSQL host (macro side only) |
 | `DB_PORT` | No | `5432` | PostgreSQL port |
 | `DB_NAME` | Yes | — | Database name |
 | `DB_USER` | Yes | — | Database user |
@@ -40,9 +52,13 @@ cp .env.example .env
 | `API_VERSION` | No | `1.0.0` | Version shown in docs |
 | `LOG_LEVEL` | No | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) |
 | `LOG_FORMAT` | No | auto | `console` (colored text) or `json`. Auto-detects: console when stdout is a tty, json when piped or redirected. |
-| `STORE_METRICS_PATH` | No | — | Path to live `store_daily_metrics.parquet` from the upstream ETL. Falls back to bundled fixtures if unset or unreadable. |
-| `ANOMALY_FLAGS_PATH` | No | — | Path to live `anomaly_flags.parquet` from the upstream ETL. Falls back to bundled fixtures if unset or unreadable. |
-| `GROCERY_FIXTURES_DIR` | No | `app/fixtures` | Directory where bundled demo parquets live. Used as the fallback source. |
+| `STORE_METRICS_PATH` | No | — | Path to live `store_daily_metrics.parquet` from the upstream ETL. Falls back to bundled fixture if unset or unreadable. |
+| `ANOMALY_FLAGS_PATH` | No | — | Path to live `anomaly_flags.parquet` from the upstream ETL. Falls back to bundled fixture if unset or unreadable. |
+| `DEPARTMENT_METRICS_PATH` | No | — | Path to live `department_daily_metrics.parquet` from the upstream ETL. Falls back to bundled fixture if unset or unreadable. |
+| `DIM_STORES_PATH` | No | — | Path to live `dim_stores.parquet` from the upstream ETL. Falls back to bundled fixture if unset or unreadable. |
+| `GROCERY_FIXTURES_DIR` | No | `app/fixtures` | Directory where bundled fixtures live. Used as the fallback source. |
+
+The four `*_PATH` env vars are independent — each path resolves to live or fixture per request via a property on the settings object. Mode detection (live vs fixture) reported by `/health` is `live` only when **all four** paths point at readable files; otherwise `fixtures`.
 
 ---
 
@@ -60,31 +76,24 @@ uvicorn app.main:app --reload
 
 ## Logging
 
-The API emits structured logs via [structlog](https://www.structlog.org/).
-Output is human-readable colored text when stdout is a tty, single-line
-JSON otherwise. Format and verbosity can be controlled via environment
-variables:
+The API emits structured logs via [structlog](https://www.structlog.org/). Output is human-readable colored text when stdout is a tty, single-line JSON otherwise. Format and verbosity are controlled by environment variables:
 
 | Variable | Values | Default |
 |---|---|---|
 | `LOG_LEVEL` | `debug`, `info`, `warning`, `error`, `critical` | `info` |
 | `LOG_FORMAT` | `console`, `json` | auto (console if tty, else json) |
 
+The structlog configurator (`app/core/logging_config.py`) chains processors that add a timestamp, the request-bound correlation ID, the log level, and the calling logger's name. The chain includes `structlog.stdlib.ExtraAdder()` so calls like `logging.info("foo", extra={"k": "v"})` propagate the structured fields through to the rendered output.
+
 ### Request correlation
 
 Every inbound HTTP request is tagged with a UUID. The middleware:
 
-- Generates a UUID per request, OR uses the value of the incoming
-  `X-Request-ID` header if the caller provides one.
-- Binds the ID to structlog's contextvars so every log line emitted
-  during the request lifetime includes a `request_id` field.
-- Echoes the ID on the response's `X-Request-ID` header so callers
-  can correlate from their side.
+- Generates a UUID per request, OR uses the value of the incoming `X-Request-ID` header if the caller provides one.
+- Binds the ID to structlog's contextvars so every log line emitted during the request lifetime includes a `request_id` field.
+- Echoes the ID on the response's `X-Request-ID` header so callers can correlate from their side.
 
-Example: when the portal calls `/store-metrics`, it can pass
-`X-Request-ID: <its-own-id>` and the API's logs for that request will
-show the same `request_id`, making it possible to trace one user's
-flow across portal logs and API logs by grepping for one UUID.
+Example: when the portal calls `/store-metrics`, it can pass `X-Request-ID: <its-own-id>` and the API's logs for that request will show the same `request_id`, making it possible to trace one user's flow across portal logs and API logs by grepping for one UUID.
 
 ### Output examples
 
@@ -116,9 +125,7 @@ LOG_FORMAT=json uvicorn app.main:app --port 8000 > api.log 2>&1
 
 ## Metrics
 
-The API exposes a `/metrics` endpoint in Prometheus text format. Any
-Prometheus-compatible scraper can poll this endpoint to collect
-time-series data on request rates, latencies, and custom counters.
+The API exposes a `/metrics` endpoint in Prometheus text format. Any Prometheus-compatible scraper can poll this endpoint to collect time-series data on request rates, latencies, and custom counters.
 
 ```bash
 curl http://localhost:8000/metrics
@@ -126,8 +133,7 @@ curl http://localhost:8000/metrics
 
 ### Auto-instrumented HTTP metrics
 
-The [prometheus-fastapi-instrumentator](https://github.com/trallnag/prometheus-fastapi-instrumentator)
-library produces three standard metrics for every route:
+The [prometheus-fastapi-instrumentator](https://github.com/trallnag/prometheus-fastapi-instrumentator) library produces three standard metrics for every route:
 
 | Metric | Type | Labels |
 |---|---|---|
@@ -137,18 +143,14 @@ library produces three standard metrics for every route:
 
 ### Custom counters
 
-Two custom counters track operational facts specific to the grocery
-endpoints:
+Two custom counters track operational facts specific to the grocery endpoints:
 
 | Metric | Type | Labels | Description |
 |---|---|---|---|
-| `grocery_data_source_total` | Counter | `source` | Increments per grocery request. `source` is `fixtures` or `live` based on `STORE_METRICS_PATH` and `ANOMALY_FLAGS_PATH` configuration. |
-| `service_call_total` | Counter | `service` | Increments per grocery service-layer call. `service` is one of `get_store_metrics`, `get_anomalies`, `get_dashboard_summary`. |
+| `grocery_data_source_total` | Counter | `source` | Increments per grocery request. `source` is `fixtures` or `live` based on the four `*_PATH` env var configuration. |
+| `service_call_total` | Counter | `service` | Increments per grocery service-layer call. `service` is the function name (e.g. `get_store_metrics`, `get_anomalies`, `get_dashboard_summary`, `get_department_metrics`, `get_dim_stores`). |
 
-Both counters increment at the same call sites as the corresponding
-structured log events (`service_call_started` and
-`service_call_completed`). Logs give per-call detail; metrics give
-aggregate rates.
+Both counters increment at the same call sites as the corresponding structured log events (`service_call_started` and `service_call_completed`). Logs give per-call detail with the request_id; metrics give aggregate rates that scrapers can plot over time.
 
 ### Example output
 
@@ -170,22 +172,40 @@ service_call_total{service="get_dashboard_summary"} 1.0
 
 ### Authentication
 
-The `/metrics` endpoint is unauthenticated. Production deployments
-should restrict access via firewall rules, an authenticating reverse
-proxy, or a service mesh — Prometheus convention is metrics endpoints
-sit inside trusted networks.
+The `/metrics` endpoint is unauthenticated. Production deployments should restrict access via firewall rules, an authenticating reverse proxy, or a service mesh — Prometheus convention is metrics endpoints sit inside trusted networks.
 
 ---
 
 ## Testing
 
-Tests mock the service layer and do not require a database connection.
-
 ```bash
-pytest
-pytest -v          # verbose
+pytest                  # all 122 tests
+pytest -v               # verbose
 pytest tests/test_metrics.py   # single file
+pytest --cov=app        # with coverage
 ```
+
+The test suite makes no live database connections and no network calls. Service-layer functions are patched via `unittest.mock.patch` so endpoint tests assert on response shapes without touching parquet files or the database. Service-layer tests use synthetic DataFrames built in-memory.
+
+The 13 test files:
+
+| File | Tests | Coverage |
+|---|---:|---|
+| `test_health.py` | 10 | `/health` endpoint, four-path live-mode contract |
+| `test_series.py` | 13 | `/series` and `/series/{series_id}` |
+| `test_metrics.py` | 13 | `/metrics/inflation`, `/metrics/unemployment`, `/metrics/gdp` |
+| `test_insights.py` | 4 | `/insights/summary` |
+| `test_grocery_service.py` | 24 | Service layer — parquet IO, filtering, pagination |
+| `test_store_metrics.py` | 10 | `/store-metrics` endpoint and pagination envelope |
+| `test_anomalies.py` | 13 | `/anomalies` endpoint, all filter parameters |
+| `test_dashboard.py` | 9 | `/dashboard-summary` envelope and aggregation |
+| `test_department_metrics.py` | 9 | `/department-metrics` endpoint and filters |
+| `test_dim_stores.py` | 7 | `/dim-stores` endpoint, ZIP/FIPS string coercion |
+| `test_observability.py` | 4 | structlog configurator, ExtraAdder bridge |
+| `test_prometheus_metrics.py` | 3 | `/metrics` endpoint, custom counter wiring |
+| `test_request_correlation.py` | 3 | X-Request-ID middleware, contextvars binding |
+
+The Pydantic schemas are themselves a form of test: any service function that returns data not matching its declared schema fails serialization, surfacing the contract violation immediately.
 
 ---
 
@@ -195,56 +215,23 @@ pytest tests/test_metrics.py   # single file
 
 #### `GET /health`
 
-Liveness and readiness check. Pings the database with `SELECT 1`.
-
-**Responses**
-
-| Status | Condition |
-|---|---|
-| `200` | API and database are both reachable |
-| `503` | Database is unreachable |
-
-```json
-{ "status": "ok", "version": "1.0.0", "db": "connected", "data_source": "fixtures" }
-```
-
-```json
-{ "status": "degraded", "version": "1.0.0", "db": "unavailable", "data_source": "live" }
-```
-
-`data_source` reports which grocery dataset the API is serving — `"live"` when `STORE_METRICS_PATH` and `ANOMALY_FLAGS_PATH` both point at readable parquet files, `"fixtures"` when the API has fallen back to the bundled demo dataset.
-
-The `db` and `data_source` fields are independent. `data_source` is computed from filesystem checks and populates correctly regardless of database availability, so a `503` response with `data_source: "fixtures"` still carries valid grocery-data signaling. In environments without a reachable PostgreSQL instance — local sandboxes, throwaway containers — `/health` will return `503` while the grocery endpoints (`/store-metrics`, `/anomalies`, `/dashboard-summary`) continue to serve correctly, since they read from parquet rather than the database.
-
----
-
-### Series
-
-#### `GET /series`
-
-List all available economic series with pagination.
-
-**Query parameters**
-
-| Param | Type | Default | Constraints | Description |
-|---|---|---|---|---|
-| `limit` | int | `50` | 1–200 | Number of results to return |
-| `offset` | int | `0` | ≥ 0 | Number of results to skip |
+Liveness and readiness check. Pings the database with `SELECT 1`. Reports `data_source` (`live` or `fixtures`) for the grocery side based on whether all four `*_PATH` env vars resolve to readable files.
 
 **Response** `200`
 
 ```json
 {
-  "total": 120,
-  "limit": 50,
-  "offset": 0,
-  "items": [
-    { "series_id": "CPIAUCSL", "series_name": "CPI_URBAN", "source": "BLS" }
-  ]
+  "status": "healthy",
+  "database": "connected",
+  "data_source": "fixtures"
 }
 ```
 
----
+### Series
+
+#### `GET /series`
+
+List all available series with metadata (id, name, source, latest date, latest value).
 
 #### `GET /series/{series_id}`
 
@@ -286,7 +273,7 @@ Metadata and full observation history for a single series, optionally filtered b
 
 ---
 
-### Metrics
+### Metrics (macro)
 
 All metric endpoints share the same query parameters and response structure.
 
@@ -353,25 +340,25 @@ Pre-aggregated snapshot of all key indicators from `public_analytics.mart_econom
 
 ---
 
-### Grocery Data Endpoints
+### Grocery data endpoints
 
-Five endpoints expose the upstream ETL's parquet outputs (`store_daily_metrics`, `anomaly_flags`, `department_daily_metrics`, `dim_stores`) as JSON. They power the Knot Shore portal's KPI overview, exception list, store-detail, and store-drilldown views.
+Five endpoints expose the upstream ETL's parquet outputs as JSON. They power the Knot Shore portal's dashboard, store drilldown, and exception triage views.
 
 #### `GET /store-metrics`
 
-Paginated store-day metric rows. Filterable by `start_date`, `end_date`, `store_id`. Pagination via `limit` (1–200, default 50) and `offset`. Same envelope as `/series` (`total`, `limit`, `offset`, `items`).
+Paginated store-day metric rows. Filterable by `start_date`, `end_date`, `store_id`. Pagination via `limit` (1–200, default 50) and `offset`. Standard envelope (`total`, `limit`, `offset`, `items`).
 
 #### `GET /anomalies`
 
-Paginated detection flags. Filterable by `start_date`, `end_date`, `store_id`, `severity_level` (`info`/`warning`/`critical`), and `rule_id` (`revenue_band`/`labor_pct_band`/`transactions_band`). Same envelope.
+Paginated detection flags. Filterable by `start_date`, `end_date`, `store_id`, `severity_level` (`info` / `warning` / `critical`), and `rule_id` (`revenue_band` / `labor_pct_band` / `avg_ticket_band` / `transactions_band` / `yoy_comp`). Standard envelope.
 
 #### `GET /dashboard-summary`
 
-Single-shot KPI overview over a required `start_date`/`end_date` window: total sales, total transactions, average labor pct, top-5 stores by revenue, exception counts by severity (always all three levels reported, including zero counts), and a daily sales trend series.
+Single-shot KPI overview over a required `start_date` / `end_date` window: total sales, total transactions, average labor pct, top-5 stores by revenue, exception counts by severity (always all three levels reported, including zero counts), and a daily sales trend series.
 
 #### `GET /department-metrics`
 
-Paginated department-grain rows at the store-day-department grain. Filterable by `start_date`, `end_date`, `store_id` (1–8), and `department_id` (1–10). Same envelope as `/store-metrics`. The canonical fixture covers 2025-07-01 through 2025-12-31 across 8 stores and 10 departments (14,706 rows).
+Paginated department-grain rows at the store-day-department grain. Filterable by `start_date`, `end_date`, `store_id` (1–8), and `department_id` (1–10). Standard envelope.
 
 Query parameters:
 
@@ -447,25 +434,31 @@ Field notes:
 - `trade_area_profile` is one of `suburban-family`, `urban-dense`, or `value-market`.
 - `open_date` is ISO format (YYYY-MM-DD).
 
-#### Live mode vs demo mode
+#### Live mode vs fixture mode
 
-The API runs in one of two modes, automatically detected at request time:
+The API runs in one of two modes for the grocery endpoints, automatically detected at request time:
 
-- **Live** — `STORE_METRICS_PATH`, `ANOMALY_FLAGS_PATH`, `DEPARTMENT_METRICS_PATH`, and `DIM_STORES_PATH` env vars all point at readable parquet files (typically the ETL's `data/processed/` output). `/health` reports `data_source: "live"`.
-- **Demo** — one or more of the env vars are unset or point at unreadable paths. The API serves the bundled fixture parquets at `app/fixtures/`. The startup log prints a WARNING and `/health` reports `data_source: "fixtures"`.
+- **Live** — all four of `STORE_METRICS_PATH`, `ANOMALY_FLAGS_PATH`, `DEPARTMENT_METRICS_PATH`, and `DIM_STORES_PATH` env vars point at readable parquet files (typically the ETL's `data/processed/canonical/` output, or a mounted volume in a container deployment). `/health` reports `data_source: "live"`.
+- **Fixture** — one or more of those env vars are unset or point at unreadable paths. The API serves the bundled fixture parquets at `app/fixtures/`. The startup log prints a WARNING and `/health` reports `data_source: "fixtures"`.
 
-Demo mode is the default for fresh clones — the API works out of the box without any configuration.
+Fixture mode is the default for fresh clones — the API works out of the box without any configuration.
+
+The four paths resolve independently per request via `Settings.resolved_*_path` properties. A misconfiguration where one path is set and three are missing will fall back to fixtures globally; the live-vs-fixtures binary applies to the whole grocery surface.
 
 #### Refreshing bundled demo fixtures
 
-The fixtures in `app/fixtures/` (`store_daily_metrics.parquet`, `anomaly_flags.parquet`, `department_daily_metrics.parquet`, `dim_stores.parquet`) are byte-identical copies of the canonical pipeline output committed at `data/processed/canonical/` in the upstream `economic-data-etl` repository. They are produced by running the actual sim engine and ETL pipeline end-to-end against the canonical 184-day backfill window — they are not separately generated synthetic data.
+The fixtures in `app/fixtures/` (`store_daily_metrics.parquet`, `anomaly_flags.parquet`, `department_daily_metrics.parquet`, `dim_stores.parquet`) are byte-identical copies of the canonical pipeline output committed at `data/processed/canonical/` in the upstream `economic-data-etl` repository. They are produced by running the actual sim engine and ETL pipeline end-to-end against the canonical paired-year window — they are not separately generated synthetic data.
 
 Current canonical contents:
 
-- `store_daily_metrics.parquet` — 1,472 rows × 6 columns; 8 stores × 184 days from 2025-07-01 through 2025-12-31
-- `anomaly_flags.parquet` — 453 rows × 9 columns; 438 info-severity, 15 warning-severity, 0 critical-severity
-- `department_daily_metrics.parquet` — 14,706 rows × 7 columns; 8 stores × 10 departments × 184 days from 2025-07-01 through 2025-12-31
-- `dim_stores.parquet` — 8 rows × 10 columns; one row per store with identification, location, and simulation engine baseline parameters
+| File | Rows × Cols | Notes |
+|---|---:|---|
+| `store_daily_metrics.parquet` | 2,944 × 6 | 8 stores × 184 days × 2 years (2024 + 2025) |
+| `department_daily_metrics.parquet` | 29,414 × 7 | Same window across 10 departments per store-day |
+| `anomaly_flags.parquet` | 983 × 9 | 950 info, 33 warning, 0 critical |
+| `dim_stores.parquet` | 8 × 10 | One row per store |
+
+The paired-year canonical (added in a recent phase) contains both 2024 and 2025 windows. Filtering `store_daily_metrics.parquet` to the 2025 window yields 1,472 rows (the original single-year canonical baseline). The 2024 window enables year-over-year comparison views in the portal's store drilldown via the existing `start_date` / `end_date` filters; no new endpoints were needed.
 
 To refresh: regenerate the canonical parquets in the upstream ETL repo (`scripts/build_canonical_fixtures.py` there), then copy the resulting files into this repo's `app/fixtures/` and commit. The upstream pipeline is byte-deterministic, so successive regenerations against the same window produce identical bytes.
 
@@ -479,41 +472,50 @@ Originally scoped for this MVP and deferred pending portal-side requirement clar
 
 ```
 app/
-├── main.py                  # App factory, middleware, health route, error handler
+├── main.py                     # App factory, middleware, health route, error handler
 ├── core/
-│   ├── config.py            # Settings loaded from environment / .env
-│   └── logging_config.py    # Logging setup (called once at startup)
+│   ├── config.py               # Settings loaded from environment / .env; resolved_*_path properties
+│   ├── logging_config.py       # Structlog configurator (called once at startup)
+│   └── metrics.py              # Custom Prometheus counters on a custom registry
 ├── api/routes/
-│   ├── series.py            # /series endpoints
-│   ├── metrics.py           # /metrics endpoints
-│   ├── insights.py          # /insights endpoints
-│   ├── store_metrics.py     # /store-metrics endpoint
-│   ├── anomalies.py         # /anomalies endpoint
-│   ├── dashboard.py         # /dashboard-summary endpoint
-│   ├── department_metrics.py # /department-metrics endpoint
-│   └── dim_stores.py        # /dim-stores endpoint
-├── fixtures/                # Bundled demo parquets (copies of upstream ETL canonical output)
-├── models/economic.py       # SQLAlchemy ORM models (read-only, no migrations)
+│   ├── series.py               # /series endpoints
+│   ├── metrics.py              # /metrics/* endpoints (macro)
+│   ├── insights.py             # /insights endpoints
+│   ├── store_metrics.py        # /store-metrics endpoint
+│   ├── anomalies.py            # /anomalies endpoint
+│   ├── dashboard.py            # /dashboard-summary endpoint
+│   ├── department_metrics.py   # /department-metrics endpoint
+│   └── dim_stores.py           # /dim-stores endpoint
+├── db/
+│   └── session.py              # SQLAlchemy engine factory and session dependency
+├── fixtures/                   # Bundled demo parquets (copies of upstream ETL canonical output)
+├── models/
+│   └── economic.py             # SQLAlchemy ORM models (read-only, no migrations)
 ├── schemas/
-│   ├── economic.py          # Pydantic schemas for series/metrics/insights
-│   └── grocery.py           # Pydantic schemas for grocery endpoints
+│   ├── economic.py             # Pydantic schemas for series/metrics/insights
+│   └── grocery.py              # Pydantic schemas for grocery endpoints
 └── services/
-    ├── economic.py          # Query logic for postgres-backed endpoints
-    └── grocery.py           # Parquet IO + aggregation for grocery endpoints
+    ├── economic.py             # Query logic for postgres-backed endpoints
+    └── grocery.py              # Parquet IO + aggregation for grocery endpoints
 
 scripts/
-└── inspect_schema.py          # Ad-hoc DB schema inspection helper
+└── inspect_schema.py           # Ad-hoc DB schema inspection helper
 
 tests/
-├── conftest.py              # Client fixture with mocked DB session
-├── test_health.py
-├── test_series.py
-├── test_metrics.py
-├── test_insights.py
-├── test_grocery_service.py
-├── test_store_metrics.py
-├── test_anomalies.py
-└── test_dashboard.py
+├── conftest.py                 # Client fixture with mocked DB session
+├── test_health.py              # /health endpoint, four-path live-mode contract
+├── test_series.py              # /series and /series/{series_id}
+├── test_metrics.py             # /metrics/inflation, /metrics/unemployment, /metrics/gdp
+├── test_insights.py            # /insights/summary
+├── test_grocery_service.py     # Service layer — parquet io, filtering, pagination
+├── test_store_metrics.py       # /store-metrics endpoint and pagination envelope
+├── test_anomalies.py           # /anomalies endpoint, all filter parameters
+├── test_dashboard.py           # /dashboard-summary envelope and aggregation
+├── test_department_metrics.py  # /department-metrics endpoint and filters
+├── test_dim_stores.py          # /dim-stores endpoint, ZIP/FIPS string coercion
+├── test_observability.py       # Structlog configurator, ExtraAdder bridge
+├── test_prometheus_metrics.py  # /metrics endpoint, custom counter wiring
+└── test_request_correlation.py # X-Request-ID middleware, contextvars binding
 ```
 
 ### Database schemas
@@ -524,6 +526,14 @@ tests/
 | `public_analytics` | Pre-aggregated mart tables optimised for API reads |
 
 This API reads from both schemas but never writes. Adding a new data source means updating the ETL pipeline; the API automatically surfaces the new data through the existing endpoints.
+
+---
+
+## Adjacent repositories
+
+- [`knot-shore-grocery-simulation-engine`](https://github.com/Caseykelly87/Knot-shore-grocery-simulation-engine) — generates the synthetic CSV data the ETL ingests; produces the data this API ultimately serves through its grocery endpoints.
+- [`economic-data-etl`](https://github.com/Caseykelly87/economic-data-etl) — produces the canonical parquet artifacts this API serves. The bundled fixtures at `app/fixtures/` are byte-identical copies of the ETL's `data/processed/canonical/` directory.
+- [`knot-shore-portal`](https://github.com/Caseykelly87/knot-shore-portal) — primary client of this API; Next.js 14 application with three primary dashboards and the platform's `/about/*` documentation hub. The reader-grade narrative for this API repo lives at [`/about/api`](https://github.com/Caseykelly87/knot-shore-portal/blob/main/app/about/api/page.tsx).
 
 ---
 
