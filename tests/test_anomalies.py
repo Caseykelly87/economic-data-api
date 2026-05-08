@@ -5,6 +5,8 @@ Service is patched so tests are isolated from parquet io.
 from datetime import date
 from unittest.mock import patch
 
+import pytest
+
 from app.schemas.grocery import AnomalyFlagOut
 
 SVC = "app.services.grocery"
@@ -79,11 +81,22 @@ def test_anomalies_severity_filter_forwarded(client):
     assert kwargs["severity_level"] == "critical"
 
 
-def test_anomalies_rule_filter_forwarded(client):
+@pytest.mark.parametrize(
+    "rule_id",
+    [
+        "revenue_band",
+        "labor_pct_band",
+        "avg_ticket_band",
+        "transactions_band",
+        "yoy_comp",
+    ],
+)
+def test_anomalies_rule_filter_forwarded(client, rule_id):
     with patch(f"{SVC}.get_anomalies", return_value=(0, [])) as mock:
-        client.get("/anomalies?rule_id=revenue_band")
+        resp = client.get(f"/anomalies?rule_id={rule_id}")
+    assert resp.status_code == 200
     _, kwargs = mock.call_args
-    assert kwargs["rule_id"] == "revenue_band"
+    assert kwargs["rule_id"] == rule_id
 
 
 def test_anomalies_limit_offset_forwarded(client):

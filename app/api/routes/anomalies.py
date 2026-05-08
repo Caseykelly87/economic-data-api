@@ -10,7 +10,13 @@ from app.services import grocery as svc
 logger = structlog.get_logger(__name__)
 
 SeverityLiteral = Literal["info", "warning", "critical"]
-RuleLiteral = Literal["revenue_band", "labor_pct_band", "transactions_band"]
+RuleLiteral = Literal[
+    "revenue_band",
+    "labor_pct_band",
+    "avg_ticket_band",
+    "transactions_band",
+    "yoy_comp",
+]
 
 router = APIRouter(prefix="/anomalies", tags=["anomalies"])
 
@@ -33,7 +39,8 @@ def list_anomalies(
     rule_id: RuleLiteral | None = Query(
         default=None,
         description="Filter to a detection rule: revenue_band, "
-                    "labor_pct_band, or transactions_band",
+                    "labor_pct_band, avg_ticket_band, transactions_band, "
+                    "or yoy_comp",
     ),
     limit: int = Query(
         default=50, ge=1, le=200, description="Number of rows to return (1–200)"

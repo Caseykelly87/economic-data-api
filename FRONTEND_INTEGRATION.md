@@ -387,7 +387,7 @@ Rows from `anomaly_flags` (one row per detected exception) with date, store, sev
 | `end_date` | `YYYY-MM-DD` | — | — | Include rows on or before this date |
 | `store_id` | integer | — | 1–8 | Filter to a single store |
 | `severity_level` | string | — | `info` / `warning` / `critical` | Filter to a severity level. Unknown values return 422. |
-| `rule_id` | string | — | `revenue_band` / `labor_pct_band` / `transactions_band` | Filter to a detection rule. Unknown values return 422. |
+| `rule_id` | string | — | `revenue_band` / `labor_pct_band` / `avg_ticket_band` / `transactions_band` / `yoy_comp` | Filter to a detection rule. Unknown values return 422. |
 | `limit` | integer | `50` | 1–200 | Items per page |
 | `offset` | integer | `0` | ≥ 0 | Items to skip |
 

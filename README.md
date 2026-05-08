@@ -221,11 +221,25 @@ Liveness and readiness check. Pings the database with `SELECT 1`. Reports `data_
 
 ```json
 {
-  "status": "healthy",
-  "database": "connected",
+  "status": "ok",
+  "version": "1.0.0",
+  "db": "connected",
   "data_source": "fixtures"
 }
 ```
+
+**Response** `503` — when the database is unreachable
+
+```json
+{
+  "status": "degraded",
+  "version": "1.0.0",
+  "db": "unavailable",
+  "data_source": "fixtures"
+}
+```
+
+The 503 form lets load balancers and orchestrators route traffic away from unhealthy instances. `data_source` continues to reflect grocery `*_PATH` configuration regardless of database state, so a 503 still tells you whether the grocery side is on live or fixture data.
 
 ### Series
 
@@ -476,7 +490,7 @@ app/
 ├── core/
 │   ├── config.py               # Settings loaded from environment / .env; resolved_*_path properties
 │   ├── logging_config.py       # Structlog configurator (called once at startup)
-│   └── metrics.py              # Custom Prometheus counters on a custom registry
+│   └── metrics.py              # Custom Prometheus counters on the prometheus_client default registry
 ├── api/routes/
 │   ├── series.py               # /series endpoints
 │   ├── metrics.py              # /metrics/* endpoints (macro)
