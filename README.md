@@ -490,7 +490,7 @@ app/
 ├── core/
 │   ├── config.py               # Settings loaded from environment / .env; resolved_*_path properties
 │   ├── logging_config.py       # Structlog configurator (called once at startup)
-│   └── metrics.py              # Custom Prometheus counters on a custom registry
+│   └── metrics.py              # Custom Prometheus counters on the prometheus_client default registry
 ├── api/routes/
 │   ├── series.py               # /series endpoints
 │   ├── metrics.py              # /metrics/* endpoints (macro)
