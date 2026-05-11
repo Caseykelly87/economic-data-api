@@ -1,0 +1,62 @@
+# Version control
+.git/
+.github/
+.gitignore
+.gitattributes
+
+# Python build / cache artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Test and coverage artifacts
+tests/
+pytest.ini
+.pytest_cache/
+.tox/
+.coverage
+htmlcov/
+
+# Environment files (never bake env into images)
+.env
+.env.local
+.env.*.local
+.env.example
+
+# Documentation other than the README (the README is included so the
+# image is self-documenting when inspected)
+FRONTEND_INTEGRATION.md
+CHANGELOG.md
+CONTRIBUTING.md
+LICENSE.md
+docs/
+
+# Container artifacts not needed at runtime
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Developer scripts (not runtime dependencies)
+scripts/
+
+# Editor / OS metadata
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
