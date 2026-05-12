@@ -32,7 +32,7 @@ Reader-grade documentation for this API — endpoint contracts, dual-mode operat
 ```bash
 python -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt
 
 cp .env.example .env
 # Fill in your database credentials (see Environment Variables below)
@@ -548,6 +548,95 @@ This API reads from both schemas but never writes. Adding a new data source mean
 - [`knot-shore-grocery-simulation-engine`](https://github.com/Caseykelly87/Knot-shore-grocery-simulation-engine) — generates the synthetic CSV data the ETL ingests; produces the data this API ultimately serves through its grocery endpoints.
 - [`economic-data-etl`](https://github.com/Caseykelly87/economic-data-etl) — produces the canonical parquet artifacts this API serves. The bundled fixtures at `app/fixtures/` are byte-identical copies of the ETL's `data/processed/canonical/` directory.
 - [`knot-shore-portal`](https://github.com/Caseykelly87/knot-shore-portal) — primary client of this API; Next.js 14 application with three primary dashboards and the platform's `/about/*` documentation hub. The reader-grade narrative for this API repo lives at [`/about/api`](https://github.com/Caseykelly87/knot-shore-portal/blob/main/app/about/api/page.tsx).
+
+---
+
+## Deployment
+
+The repository ships a `Dockerfile` that produces a self-contained image of the API. The image bundles the grocery parquet fixtures from `app/fixtures/`, so the grocery routes (`/store-metrics`, `/anomalies`, `/department-metrics`, `/dim-stores`, `/dashboard-summary`) work as soon as the container starts. The macro routes (`/series`, `/metrics/*`, `/insights/*`) require a reachable PostgreSQL — connection details are read from the `DB_*` environment variables at runtime, never baked into the image.
+
+The Dockerfile is target-agnostic: it runs on plain Docker hosts, Railway, Render, Fly.io, AWS ECS, Google Cloud Run, or Kubernetes. Port and worker count are configurable via `PORT` and `WORKERS` env vars so platform-as-a-service injection patterns work without modification.
+
+### Building the image
+
+```bash
+docker build -t economic-data-api .
+```
+
+On Apple Silicon hosts deploying to amd64 targets, use buildx:
+
+```bash
+docker buildx build --platform linux/amd64 -t economic-data-api .
+```
+
+The production image installs from `requirements.txt` only; test dependencies in `requirements-dev.txt` are not bundled.
+
+### Running with a local PostgreSQL via docker-compose
+
+`docker-compose.smoke.yml` brings the API up alongside a throwaway `postgres:16-alpine` seeded with empty mart schemas. It is the simplest local-dev path and is also what the smoke test uses.
+
+```bash
+docker compose -f docker-compose.smoke.yml up -d
+curl http://localhost:8000/health
+docker compose -f docker-compose.smoke.yml down -v
+```
+
+The compose stack creates empty `raw` and `public_analytics` schemas so macro routes return 200 with an empty list rather than 500 from missing tables. For a populated database, use the `economic-data-etl` upstream pipeline.
+
+### Running against an external PostgreSQL
+
+```bash
+docker run -p 8000:8000 \
+    -e DB_HOST=<host> \
+    -e DB_PORT=5432 \
+    -e DB_NAME=<db> \
+    -e DB_USER=<user> \
+    -e DB_PASSWORD=<password> \
+    economic-data-api
+```
+
+The four grocery `*_PATH` env vars are optional. When unset, the container serves the bundled `app/fixtures/` parquets. Point them at mounted live parquet paths to serve the upstream ETL's canonical output instead.
+
+### Running the smoke test
+
+```bash
+./scripts/smoke_test_container.sh
+```
+
+Builds the image, brings the compose stack up, polls `/health`, exercises the macro and grocery routes against the running container, and tears the stack down. Setting `API_URL=http://host:port` skips the build/up/down and runs only the endpoint checks against an existing URL.
+
+### Environment variables
+
+The five `DB_*` variables are required for the container to start (the Settings model in `app/core/config.py` has no defaults for them and the SQLAlchemy engine is created at import time). The rest are optional with the defaults shown.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `DB_HOST` | Yes | — | PostgreSQL host |
+| `DB_PORT` | No | `5432` | PostgreSQL port |
+| `DB_NAME` | Yes | — | Database name |
+| `DB_USER` | Yes | — | Database user |
+| `DB_PASSWORD` | Yes | — | Database password |
+| `API_ENV` | No | `development` | Environment label exposed via `/health` |
+| `API_TITLE` | No | `Economic Data API` | Title shown in Swagger and ReDoc |
+| `API_VERSION` | No | `1.0.0` | Version shown in docs and `/health` |
+| `LOG_LEVEL` | No | `INFO` | Verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+| `LOG_FORMAT` | No | auto | `console` (colored) or `json`. Auto-detects: console when stdout is a tty, json when piped. |
+| `CORS_ORIGINS` | No | `*` | Comma-separated allowed origins, or `*` for any |
+| `STORE_METRICS_PATH` | No | bundled fixture | Path to live `store_daily_metrics.parquet` |
+| `ANOMALY_FLAGS_PATH` | No | bundled fixture | Path to live `anomaly_flags.parquet` |
+| `DEPARTMENT_METRICS_PATH` | No | bundled fixture | Path to live `department_daily_metrics.parquet` |
+| `DIM_STORES_PATH` | No | bundled fixture | Path to live `dim_stores.parquet` |
+| `GROCERY_FIXTURES_DIR` | No | `app/fixtures` | Directory bundled fixtures are read from |
+| `PORT` | No | `8000` | Port uvicorn binds to inside the container |
+| `WORKERS` | No | `1` | Number of uvicorn worker processes |
+
+### Deployment-target notes
+
+- **Railway** — Set the five `DB_*` variables in the project's environment. Railway injects `PORT`; the container uses it automatically. Point a Railway-managed Postgres add-on at `DB_HOST` etc., or supply credentials for an external database.
+- **Render** — Set `PORT=10000` (Render's expected internal port) or accept the value Render injects. Configure `DB_*` from a Render Postgres or external service via the dashboard's environment-variables panel.
+- **Fly.io** — In `fly.toml` set `internal_port = 8000` (or whatever `PORT` is set to). Fly Postgres or Supabase makes a reasonable backing store; provide credentials via `fly secrets set`.
+- **AWS ECS** — Define `DB_*` as task-definition environment variables (or pull from Secrets Manager via `secrets:`). Set the task's healthcheck path to `/health`. The container binds 0.0.0.0:8000 by default, so the task definition's `containerPort` is `8000` unless `PORT` is overridden.
+- **Google Cloud Run** — Set `PORT=8080` (Cloud Run's required port). Provide `DB_*` via Cloud Run environment variables or Secret Manager. For Cloud SQL, use the Cloud SQL Auth Proxy sidecar or the `--add-cloudsql-instances` flag and set `DB_HOST` to the proxy's socket path or IP.
 
 ---
 

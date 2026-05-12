@@ -1,0 +1,43 @@
+# Smoke-test stack: brings the API and a throwaway PostgreSQL up
+# together so the containerized service can be exercised end-to-end.
+# Not for development or production; driven by scripts/smoke_test_container.sh.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: knotshore
+      POSTGRES_PASSWORD: knotshore_smoke
+      POSTGRES_DB: knotshore
+    volumes:
+      - ./scripts/smoke_init.sql:/docker-entrypoint-initdb.d/01_smoke_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U knotshore -d knotshore"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks:
+      - smoke
+
+  api:
+    build: .
+    image: economic-data-api
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: knotshore
+      DB_USER: knotshore
+      DB_PASSWORD: knotshore_smoke
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - smoke
+
+networks:
+  smoke:
+    driver: bridge
