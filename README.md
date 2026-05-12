@@ -32,7 +32,7 @@ Reader-grade documentation for this API — endpoint contracts, dual-mode operat
 ```bash
 python -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt
 
 cp .env.example .env
 # Fill in your database credentials (see Environment Variables below)
@@ -568,6 +568,8 @@ On Apple Silicon hosts deploying to amd64 targets, use buildx:
 ```bash
 docker buildx build --platform linux/amd64 -t economic-data-api .
 ```
+
+The production image installs from `requirements.txt` only; test dependencies in `requirements-dev.txt` are not bundled.
 
 ### Running with a local PostgreSQL via docker-compose
 
