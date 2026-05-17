@@ -4,7 +4,7 @@ Usage: python scripts/inspect_schema.py
 
 Requires a valid .env file in the project root.
 """
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, text
 import sys
 import os
 
@@ -44,7 +44,7 @@ with engine.connect() as conn:
             # Show a sample row
             sample = conn.execute(text(f'SELECT * FROM "{schema}"."{table}" LIMIT 1')).fetchone()
             if sample:
-                print(f"  --- sample row ---")
+                print("  --- sample row ---")
                 for key, val in zip(sample._fields, sample):
                     print(f"  {key}: {val}")
         except Exception as e:
