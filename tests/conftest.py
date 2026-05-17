@@ -4,12 +4,12 @@ import os
 for _var, _val in [("DB_HOST", "localhost"), ("DB_NAME", "test"), ("DB_USER", "test"), ("DB_PASSWORD", "test")]:
     os.environ.setdefault(_var, _val)
 
-import pytest
-from unittest.mock import MagicMock
-from fastapi.testclient import TestClient
+import pytest  # noqa: E402
+from unittest.mock import MagicMock  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 
-from app.main import app
-from app.db.session import get_db
+from app.main import app  # noqa: E402
+from app.db.session import get_db  # noqa: E402
 
 
 @pytest.fixture

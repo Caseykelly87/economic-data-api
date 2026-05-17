@@ -1,5 +1,7 @@
 # Economic Data API
 
+[![Tests](https://github.com/Caseykelly87/economic-data-api/actions/workflows/test.yml/badge.svg)](https://github.com/Caseykelly87/economic-data-api/actions/workflows/test.yml)
+
 A read-only REST API that exposes economic time-series data and grocery analytics. Built with FastAPI and SQLAlchemy. The macro side reads from Postgres (the upstream `economic-data-etl` repo's load target); the grocery side reads from parquet files (also produced by `economic-data-etl`). The service is one of four repositories in the Knot Shore Grocery analytics platform — it sits between the ETL pipeline and the consumer-facing portal.
 
 ## Where this fits in the platform

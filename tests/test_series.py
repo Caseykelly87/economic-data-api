@@ -6,7 +6,7 @@ Service functions are patched so tests are isolated from the DB.
 from datetime import date
 from unittest.mock import patch
 
-from app.schemas.economic import ObservationOut, PaginatedSeriesOut, SeriesDetailOut, SeriesOut
+from app.schemas.economic import ObservationOut, SeriesDetailOut, SeriesOut
 
 SVC = "app.services.economic"
 
