@@ -34,14 +34,36 @@ def test_load_store_metrics_df_returns_dataframe():
     df = svc.load_store_metrics_df()
     assert isinstance(df, pd.DataFrame)
     assert set(df.columns) == METRICS_COLS
-    assert len(df) > 0
+    # The bundled fixture is the ETL canonical store_daily_metrics parquet:
+    # 8 stores across 2024-07-01..2025-12-31 (368 days) = 2944 store-days.
+    assert len(df) == 2944
+    # The read pipeline must preserve the canonical date dtype — rows carry
+    # datetime.date objects, not strings — so date-range filters compare
+    # correctly against the typed query parameters.
+    assert isinstance(df["date"].iloc[0], date)
+    # A known store-day value read directly off the canonical parquet.
+    row = df[(df["store_id"] == 1) & (df["date"] == date(2024, 7, 1))].iloc[0]
+    assert row["total_sales"] == 86429.35
+    assert row["transaction_count"] == 2337
 
 
 def test_load_anomaly_flags_df_returns_dataframe():
     df = svc.load_anomaly_flags_df()
     assert isinstance(df, pd.DataFrame)
     assert set(df.columns) == FLAG_COLS
-    assert len(df) > 0
+    # The bundled fixture is the ETL canonical anomaly_flags parquet.
+    assert len(df) == 831
+    assert isinstance(df["date"].iloc[0], date)
+    # A known flag read off the canonical parquet: store 7's revenue_band
+    # exception on 2024-07-05.
+    flag = df[
+        (df["store_id"] == 7)
+        & (df["date"] == date(2024, 7, 5))
+        & (df["rule_id"] == "revenue_band")
+    ]
+    assert len(flag) == 1
+    assert flag.iloc[0]["actual_value"] == 70154.26
+    assert flag.iloc[0]["severity_level"] == "info"
 
 
 def test_load_store_metrics_raises_when_path_missing(monkeypatch):
@@ -69,20 +91,37 @@ def test_load_anomaly_flags_raises_when_path_missing(monkeypatch):
 def test_get_store_metrics_returns_total_and_items():
     total, items = svc.get_store_metrics(limit=10, offset=0)
     assert isinstance(total, int)
-    assert total > 0
-    assert isinstance(items, list)
+    # total is the full canonical row count, independent of the page size.
+    assert total == 2944
     assert all(isinstance(item, StoreMetricOut) for item in items)
-    assert len(items) <= 10
+    assert len(items) == 10
+    # The service sorts by (date, store_id), so the first page opens with
+    # store 1 on the earliest canonical date.
+    first = items[0]
+    assert first.date == date(2024, 7, 1)
+    assert first.store_id == 1
+    assert first.total_sales == 86429.35
+    assert first.transaction_count == 2337
 
 
 def test_get_store_metrics_pagination_honored():
     total_full, _ = svc.get_store_metrics(limit=1, offset=0)
     _, page_a = svc.get_store_metrics(limit=5, offset=0)
     _, page_b = svc.get_store_metrics(limit=5, offset=5)
+    assert total_full == 2944
     assert len(page_a) == 5
     assert len(page_b) == 5
-    assert page_a[0] != page_b[0]
-    assert total_full > 0
+    # Rows sort by (date, store_id). The first page is store-days 1-5 of the
+    # opening canonical date; the second picks up at store 6 and rolls into
+    # the next date once the eight stores are exhausted.
+    assert [(r.date, r.store_id) for r in page_a] == [
+        (date(2024, 7, 1), 1), (date(2024, 7, 1), 2), (date(2024, 7, 1), 3),
+        (date(2024, 7, 1), 4), (date(2024, 7, 1), 5),
+    ]
+    assert [(r.date, r.store_id) for r in page_b] == [
+        (date(2024, 7, 1), 6), (date(2024, 7, 1), 7), (date(2024, 7, 1), 8),
+        (date(2024, 7, 2), 1), (date(2024, 7, 2), 2),
+    ]
 
 
 def test_get_store_metrics_date_range_filter():
@@ -129,8 +168,17 @@ def test_get_store_metrics_empty_when_no_match():
 def test_get_anomalies_returns_total_and_items():
     total, items = svc.get_anomalies(limit=200, offset=0)
     assert isinstance(total, int)
-    assert total > 0
+    # Full canonical anomaly_flags row count.
+    assert total == 831
+    assert len(items) == 200
     assert all(isinstance(item, AnomalyFlagOut) for item in items)
+    # The service sorts by (date, store_id, rule_id); the first flag is
+    # store 7's revenue_band exception on the earliest flagged date.
+    first = items[0]
+    assert first.date == date(2024, 7, 5)
+    assert first.store_id == 7
+    assert first.rule_id == "revenue_band"
+    assert first.actual_value == 70154.26
 
 
 def test_get_anomalies_severity_filter():
@@ -173,7 +221,16 @@ def test_get_anomalies_pagination_honored():
     _, page_b = svc.get_anomalies(limit=2, offset=2)
     assert len(page_a) == 2
     assert len(page_b) == 2
-    assert page_a[0] != page_b[0]
+    # Rows sort by (date, store_id, rule_id); offset=2 advances exactly two
+    # rows into that ordering.
+    assert [(f.date, f.store_id, f.rule_id) for f in page_a] == [
+        (date(2024, 7, 5), 7, "revenue_band"),
+        (date(2024, 7, 5), 7, "transactions_band"),
+    ]
+    assert [(f.date, f.store_id, f.rule_id) for f in page_b] == [
+        (date(2024, 7, 5), 8, "revenue_band"),
+        (date(2024, 7, 5), 8, "transactions_band"),
+    ]
 
 
 def test_get_anomalies_empty_when_no_match():
@@ -202,9 +259,14 @@ def test_dashboard_summary_required_fields():
     s = svc.get_dashboard_summary(start_date=start, end_date=end)
     assert s.start_date == start
     assert s.end_date == end
-    assert s.total_sales > 0
-    assert s.total_transactions > 0
-    assert s.average_labor_cost_pct is not None
+    # Totals are independently derived by aggregating the canonical parquet,
+    # matching the rounding the service applies, rather than snapshotting
+    # whatever the summary currently emits.
+    assert s.total_sales == round(float(df["total_sales"].sum()), 2)
+    assert s.total_transactions == int(df["transaction_count"].sum())
+    assert s.average_labor_cost_pct == round(
+        float(df["labor_cost_pct"].mean()), 6
+    )
 
 
 def test_dashboard_summary_top_stores_capped_at_5():
