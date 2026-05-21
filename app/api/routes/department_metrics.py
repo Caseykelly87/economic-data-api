@@ -34,8 +34,7 @@ def list_department_metrics(
     store, and department, with pagination.
 
     The grain is store-day-department: one row per (date, store_id,
-    department_id) triple. The full canonical dataset has 14,706 rows
-    covering 2025-07-01 through 2025-12-31 across 8 stores and 10
+    department_id) triple. The full canonical dataset has 29,414 rows covering 2024-07-01 through 2025-12-31 across 8 stores and 10
     departments.
     """
     total, items = svc.get_department_metrics(
