@@ -39,29 +39,42 @@ Accept: application/json   ← optional, already the default
 
 ### Confirming connectivity
 
-Before rendering anything, call `/health`. If it returns `503`, the database
-is down and no data endpoints will work — show an appropriate error state.
+Before rendering anything, call `/health`. The top-level `status` is the
+signal to switch on: `healthy` or `degraded` means the grocery data the
+dashboard depends on is being served; `unhealthy` (HTTP `503`) means it is
+not — show an appropriate error state.
 
 ```
 GET /health
 ```
 
 ```json
-{ "status": "ok", "version": "1.0.0", "db": "connected", "data_source": "fixtures" }
+{
+  "status": "healthy",
+  "version": "1.0.0",
+  "grocery_pipeline": { "status": "healthy", "mode": "offline", "canonical_path": "app/fixtures" },
+  "macro_pipeline": { "status": "healthy" }
+}
 ```
 
 ```json
-{ "status": "degraded", "version": "1.0.0", "db": "unavailable", "data_source": "live" }
+{
+  "status": "degraded",
+  "version": "1.0.0",
+  "grocery_pipeline": { "status": "healthy", "mode": "online", "canonical_path": "/data/canonical" },
+  "macro_pipeline": { "status": "unavailable", "reason": "database unreachable" }
+}
 ```
 
 | Field | Values |
 |---|---|
-| `status` | `"ok"` or `"degraded"` |
-| `db` | `"connected"` or `"unavailable"` |
-| `data_source` | `"live"` or `"fixtures"` — see [section 8](#8-demo-mode) |
-| HTTP status | `200` (ok) or `503` (degraded) |
+| `status` | `"healthy"`, `"degraded"`, or `"unhealthy"` |
+| `grocery_pipeline.status` | `"healthy"` or `"unavailable"` |
+| `grocery_pipeline.mode` | `"online"` or `"offline"` — see [section 8](#8-demo-mode) |
+| `macro_pipeline.status` | `"healthy"` or `"unavailable"` |
+| HTTP status | `200` (healthy or degraded) or `503` (unhealthy) |
 
-`db` and `data_source` are independent signals. The HTTP status code reflects only the database probe; `data_source` is derived from filesystem checks and populates correctly even when the database is unavailable. The grocery endpoints (`/store-metrics`, `/anomalies`, `/dashboard-summary`) read from parquet rather than the database, so they continue to serve correctly during a `503`. Treat `db` as the gate for series/metrics/insights endpoints, and treat `data_source` as the gate for trusting grocery responses against live ETL output.
+The grocery and macro pipelines fail independently. `degraded` means the macro database is unreachable but the grocery endpoints (`/store-metrics`, `/anomalies`, `/dashboard-summary`, `/department-metrics`, `/dim-stores`) — which read from parquet rather than the database — still serve correctly. Treat `macro_pipeline.status` as the gate for series/metrics/insights endpoints, and treat `grocery_pipeline.mode` as the gate for trusting grocery responses against live ETL output.
 
 ---
 
@@ -121,10 +134,12 @@ Triggered when a query parameter has the wrong type or fails a constraint
 
 The API never leaks stack traces to the client.
 
-### Database unavailable — `503`
+### Service unhealthy — `503`
 
-Only returned by `/health`. All other endpoints will return `500` if the DB
-goes down mid-request.
+Returned by `/health` when the grocery pipeline cannot serve data. A macro
+database outage does not produce a `503` — `/health` reports that as
+`degraded` with HTTP `200`. The series, metrics, and insights endpoints
+return `500` if the database goes down mid-request.
 
 ---
 
@@ -557,13 +572,14 @@ fresh clone. The grocery endpoints (`/store-metrics`, `/anomalies`,
   ETL's `data/processed/` output). The API serves real data.
 - **Demo mode** — those env vars are unset or unreadable. The API falls
   back to bundled fixture parquets in `app/fixtures/`, logs a startup
-  WARNING, and reports `data_source: "fixtures"` on `/health`.
+  WARNING, and reports `grocery_pipeline.mode: "offline"` on `/health`.
 
-The `data_source` field on `/health` is the authoritative signal of which
-mode is active. From a frontend perspective the JSON shape is identical in
-both modes — there is nothing the UI needs to switch on. The flag exists for
-operators debugging an unexpected `/health` payload, and as a safety check
-when verifying a deployment ("am I really pointing at the live ETL?").
+The `grocery_pipeline.mode` field on `/health` is the authoritative signal
+of which mode is active. From a frontend perspective the JSON shape is
+identical in both modes — there is nothing the UI needs to switch on. The
+field exists for operators debugging an unexpected `/health` payload, and as
+a safety check when verifying a deployment ("am I really pointing at the
+live ETL?").
 
 **The demo dataset is real pipeline output.** It is a byte-identical
 snapshot of a 184-day canonical run of the upstream sim engine + ETL

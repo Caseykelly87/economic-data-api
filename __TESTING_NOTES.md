@@ -93,9 +93,9 @@ The load-bearing read/serve logic and the tests that hold it.
 
 **Dual-mode operation:**
 
-- **Mode detection** — `test_health.py::test_health_data_source_is_*`.
-  `/health` reports `fixtures` when no `*_PATH` is set and `live` when all
-  four resolve to readable files.
+- **Mode detection** — `test_health.py::test_health_grocery_mode_is_*`.
+  `/health` reports `grocery_pipeline.mode` as `offline` when no `*_PATH`
+  is set and `online` when all four resolve to readable files.
 - **Mode equivalence** — `test_etl_contract.py::
   test_offline_and_online_modes_serve_identical_output`. See "Dual-mode
   considerations" below.
@@ -150,7 +150,7 @@ The API resolves each grocery parquet through a four-path lookup
 (`settings.resolved_*_path`): if the configured `*_PATH` points at a
 readable file it is used (online mode), otherwise the bundled `app/fixtures`
 parquet is used (offline mode). `/health` reports the mode via
-`data_source`.
+`grocery_pipeline.mode`.
 
 `test_offline_and_online_modes_serve_identical_output` verifies the
 contract that both modes produce identical output for identical input. It
@@ -165,7 +165,7 @@ Coverage by mode after this pass:
 - **Offline mode** — well covered. Every `test_grocery_service.py` test and
   three of the four contract tests run against the bundled fixtures.
 - **Online mode** — mode *detection* was already covered
-  (`test_health_data_source_is_live_when_paths_exist`, which uses empty
+  (`test_health_grocery_mode_is_online_when_paths_exist`, which uses empty
   placeholder files). Online-mode *serving* — actually reading and serving
   data through a resolved live path — was untested before this pass;
   `test_offline_and_online_modes_serve_identical_output` now exercises it.
@@ -262,7 +262,7 @@ conventions:
 - **Dual-mode equivalence is a reusable pattern.** Where a layer can read
   from more than one source for the same logical data, assert that the
   sources produce identical output for identical input, and assert that any
-  mode indicator (here, `/health`'s `data_source`) reports the mode the
+  mode indicator (here, `/health`'s `grocery_pipeline.mode`) reports the mode the
   layer is actually operating in.
 - **The three-category vocabulary** — business-correctness, structural,
   ceremony — is the shared language for grading test strength across the
