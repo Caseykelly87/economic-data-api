@@ -154,7 +154,7 @@ def test_offline_and_online_modes_serve_identical_output(client, tmp_path):
 
     # Offline mode: no *_PATH set, bundled fixtures served.
     assert settings.grocery_data_source == "fixtures"
-    assert client.get("/health").json()["data_source"] == "fixtures"
+    assert client.get("/health").json()["grocery_pipeline"]["mode"] == "offline"
     offline = {path: client.get(path, params=p).json() for path, p in requests}
 
     # Online mode: copy the canonical parquets out and resolve to the copies.
@@ -166,7 +166,7 @@ def test_offline_and_online_modes_serve_identical_output(client, tmp_path):
 
     with _patched_settings(overrides):
         assert settings.grocery_data_source == "live"
-        assert client.get("/health").json()["data_source"] == "live"
+        assert client.get("/health").json()["grocery_pipeline"]["mode"] == "online"
         online = {path: client.get(path, params=p).json() for path, p in requests}
 
     assert online == offline

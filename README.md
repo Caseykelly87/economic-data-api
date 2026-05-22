@@ -193,7 +193,7 @@ The 13 test files:
 
 | File | Tests | Coverage |
 |---|---:|---|
-| `test_health.py` | 10 | `/health` endpoint, four-path live-mode contract |
+| `test_health.py` | 15 | `/health` endpoint, component-level pipeline status |
 | `test_series.py` | 13 | `/series` and `/series/{series_id}` |
 | `test_metrics.py` | 13 | `/metrics/inflation`, `/metrics/unemployment`, `/metrics/gdp` |
 | `test_insights.py` | 4 | `/insights/summary` |
@@ -217,31 +217,61 @@ The Pydantic schemas are themselves a form of test: any service function that re
 
 #### `GET /health`
 
-Liveness and readiness check. Pings the database with `SELECT 1`. Reports `data_source` (`live` or `fixtures`) for the grocery side based on whether all four `*_PATH` env vars resolve to readable files.
+Component-level liveness and readiness check. Reports the grocery and macro pipelines independently — the grocery pipeline serves canonical parquet data and is the platform-critical path; the macro pipeline serves economic series from Postgres. Overall `status` and the HTTP code track the grocery pipeline: `200` whenever it can serve data, `degraded` when the macro database is unreachable but grocery is fine, `503` only when the grocery pipeline itself cannot serve data.
 
-**Response** `200`
+**Response** `200` — both pipelines healthy
 
 ```json
 {
-  "status": "ok",
+  "status": "healthy",
   "version": "1.0.0",
-  "db": "connected",
-  "data_source": "fixtures"
+  "grocery_pipeline": {
+    "status": "healthy",
+    "mode": "offline",
+    "canonical_path": "app/fixtures"
+  },
+  "macro_pipeline": {
+    "status": "healthy"
+  }
 }
 ```
 
-**Response** `503` — when the database is unreachable
+**Response** `200` — grocery healthy, macro database unreachable
 
 ```json
 {
   "status": "degraded",
   "version": "1.0.0",
-  "db": "unavailable",
-  "data_source": "fixtures"
+  "grocery_pipeline": {
+    "status": "healthy",
+    "mode": "online",
+    "canonical_path": "/data/canonical"
+  },
+  "macro_pipeline": {
+    "status": "unavailable",
+    "reason": "database unreachable"
+  }
 }
 ```
 
-The 503 form lets load balancers and orchestrators route traffic away from unhealthy instances. `data_source` continues to reflect grocery `*_PATH` configuration regardless of database state, so a 503 still tells you whether the grocery side is on live or fixture data.
+**Response** `503` — grocery pipeline unavailable
+
+```json
+{
+  "status": "unhealthy",
+  "version": "1.0.0",
+  "grocery_pipeline": {
+    "status": "unavailable",
+    "mode": "offline",
+    "canonical_path": "app/fixtures"
+  },
+  "macro_pipeline": {
+    "status": "healthy"
+  }
+}
+```
+
+`grocery_pipeline.mode` is `online` when all four `*_PATH` env vars resolve to readable parquet files and `offline` when the API serves bundled fixtures. A macro database outage is reported as `degraded` rather than failing the whole instance, so a load balancer keeps routing grocery traffic to a node whose database is down.
 
 ### Series
 
@@ -454,8 +484,8 @@ Field notes:
 
 The API runs in one of two modes for the grocery endpoints, automatically detected at request time:
 
-- **Live** — all four of `STORE_METRICS_PATH`, `ANOMALY_FLAGS_PATH`, `DEPARTMENT_METRICS_PATH`, and `DIM_STORES_PATH` env vars point at readable parquet files (typically the ETL's `data/processed/canonical/` output, or a mounted volume in a container deployment). `/health` reports `data_source: "live"`.
-- **Fixture** — one or more of those env vars are unset or point at unreadable paths. The API serves the bundled fixture parquets at `app/fixtures/`. The startup log prints a WARNING and `/health` reports `data_source: "fixtures"`.
+- **Live** — all four of `STORE_METRICS_PATH`, `ANOMALY_FLAGS_PATH`, `DEPARTMENT_METRICS_PATH`, and `DIM_STORES_PATH` env vars point at readable parquet files (typically the ETL's `data/processed/canonical/` output, or a mounted volume in a container deployment). `/health` reports `grocery_pipeline.mode: "online"`.
+- **Fixture** — one or more of those env vars are unset or point at unreadable paths. The API serves the bundled fixture parquets at `app/fixtures/`. The startup log prints a WARNING and `/health` reports `grocery_pipeline.mode: "offline"`.
 
 Fixture mode is the default for fresh clones — the API works out of the box without any configuration.
 

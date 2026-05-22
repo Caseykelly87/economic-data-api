@@ -147,35 +147,51 @@ else:
 @app.get("/health", tags=["health"])
 def health_check(db: Session = Depends(get_db)):
     """
-    Liveness + readiness check.
+    Component-level liveness and readiness check.
 
-    Returns 200 when the API and database are both reachable.
-    Returns 503 when the database cannot be reached, so load balancers and
-    orchestrators can route traffic away from unhealthy instances.
+    The service composes two independent pipelines. The grocery pipeline
+    serves canonical parquet data and is the platform-critical path; the
+    macro pipeline serves economic series from Postgres. They fail
+    independently, so /health reports each one separately.
+
+    Overall status and HTTP code track the grocery pipeline: 200 whenever
+    it can serve data, "degraded" when the macro database is unreachable
+    but grocery is fine, 503 only when the grocery pipeline itself cannot
+    serve data.
     """
+    grocery_available = settings.grocery_data_available
+    grocery = {
+        "status": "healthy" if grocery_available else "unavailable",
+        "mode": "online" if settings.grocery_data_source == "live" else "offline",
+        "canonical_path": settings.canonical_path,
+    }
+
     try:
         db.execute(text("SELECT 1"))
-        db_status = "connected"
-        http_status = 200
-        api_status = "ok"
+        macro = {"status": "healthy"}
     except Exception as exc:
         logger.warning(
-            "health_db_check_failed",
+            "health_macro_db_check_failed",
             error=str(exc),
             error_type=type(exc).__name__,
             exc_info=True,
         )
-        db_status = "unavailable"
-        http_status = 503
-        api_status = "degraded"
+        macro = {"status": "unavailable", "reason": "database unreachable"}
+
+    if not grocery_available:
+        overall_status, http_status = "unhealthy", 503
+    elif macro["status"] != "healthy":
+        overall_status, http_status = "degraded", 200
+    else:
+        overall_status, http_status = "healthy", 200
 
     return JSONResponse(
         status_code=http_status,
         content={
-            "status": api_status,
+            "status": overall_status,
             "version": settings.API_VERSION,
-            "db": db_status,
-            "data_source": settings.grocery_data_source,
+            "grocery_pipeline": grocery,
+            "macro_pipeline": macro,
         },
     )
 

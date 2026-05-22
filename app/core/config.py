@@ -82,5 +82,28 @@ class Settings(BaseSettings):
         live_dim_stores = bool(self.DIM_STORES_PATH) and Path(self.DIM_STORES_PATH).is_file()
         return "live" if (live_metrics and live_flags and live_departments and live_dim_stores) else "fixtures"
 
+    @property
+    def grocery_data_available(self) -> bool:
+        """True when all four grocery parquet files resolve to readable
+        files — configured live paths where set, bundled fixtures
+        otherwise. The grocery pipeline can serve data whenever this holds.
+        Reported by /health."""
+        return all(
+            Path(path).is_file()
+            for path in (
+                self.resolved_store_metrics_path,
+                self.resolved_anomaly_flags_path,
+                self.resolved_department_metrics_path,
+                self.resolved_dim_stores_path,
+            )
+        )
+
+    @property
+    def canonical_path(self) -> str:
+        """Directory the grocery parquet files are served from: the live
+        canonical directory in online mode, the bundled fixtures directory
+        otherwise. Reported by /health."""
+        return str(Path(self.resolved_store_metrics_path).parent)
+
 
 settings = Settings()

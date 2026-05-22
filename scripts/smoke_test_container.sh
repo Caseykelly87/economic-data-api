@@ -98,15 +98,15 @@ if [ "${HEALTH_CODE}" = "200" ]; then
 else
     record_fail "expected 200, got ${HEALTH_CODE} (body: ${HEALTH_BODY})"
 fi
-if echo "${HEALTH_BODY}" | grep -q '"status":"ok"'; then
-    record_pass "body contains status=ok"
+if echo "${HEALTH_BODY}" | grep -q '"status":"healthy"'; then
+    record_pass "body reports status=healthy"
 else
-    record_fail "body missing status=ok (body: ${HEALTH_BODY})"
+    record_fail "body missing status=healthy (body: ${HEALTH_BODY})"
 fi
-if echo "${HEALTH_BODY}" | grep -q '"db":"connected"'; then
-    record_pass "body contains db=connected"
+if echo "${HEALTH_BODY}" | grep -q '"grocery_pipeline":{"status":"healthy"'; then
+    record_pass "body reports grocery_pipeline healthy"
 else
-    record_fail "body missing db=connected (body: ${HEALTH_BODY})"
+    record_fail "body missing grocery_pipeline status=healthy (body: ${HEALTH_BODY})"
 fi
 
 # /metrics/inflation — macro route, returns a JSON list (possibly empty
