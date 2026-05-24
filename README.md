@@ -181,7 +181,7 @@ The `/metrics` endpoint is unauthenticated. Production deployments should restri
 ## Testing
 
 ```bash
-pytest                  # all 122 tests
+pytest                  # all 135 tests
 pytest -v               # verbose
 pytest tests/test_metrics.py   # single file
 pytest --cov=app        # with coverage
@@ -189,7 +189,7 @@ pytest --cov=app        # with coverage
 
 The test suite makes no live database connections and no network calls. Service-layer functions are patched via `unittest.mock.patch` so endpoint tests assert on response shapes without touching parquet files or the database. Service-layer tests use synthetic DataFrames built in-memory.
 
-The 13 test files:
+The 14 test files:
 
 | File | Tests | Coverage |
 |---|---:|---|
@@ -199,10 +199,11 @@ The 13 test files:
 | `test_insights.py` | 4 | `/insights/summary` |
 | `test_grocery_service.py` | 24 | Service layer — parquet IO, filtering, pagination |
 | `test_store_metrics.py` | 10 | `/store-metrics` endpoint and pagination envelope |
-| `test_anomalies.py` | 13 | `/anomalies` endpoint, all filter parameters |
+| `test_anomalies.py` | 17 | `/anomalies` endpoint, all filter parameters |
 | `test_dashboard.py` | 9 | `/dashboard-summary` envelope and aggregation |
 | `test_department_metrics.py` | 9 | `/department-metrics` endpoint and filters |
 | `test_dim_stores.py` | 7 | `/dim-stores` endpoint, ZIP/FIPS string coercion |
+| `test_etl_contract.py` | 4 | Byte-identical fixture contract: ETL canonical parquet → API served values |
 | `test_observability.py` | 4 | structlog configurator, ExtraAdder bridge |
 | `test_prometheus_metrics.py` | 3 | `/metrics` endpoint, custom counter wiring |
 | `test_request_correlation.py` | 3 | X-Request-ID middleware, contextvars binding |
@@ -277,7 +278,7 @@ Component-level liveness and readiness check. Reports the grocery and macro pipe
 
 #### `GET /series`
 
-List all available series with metadata (id, name, source, latest date, latest value).
+Paginated list of available series with metadata (id, name, source).
 
 #### `GET /series/{series_id}`
 
@@ -501,10 +502,10 @@ Current canonical contents:
 |---|---:|---|
 | `store_daily_metrics.parquet` | 2,944 × 6 | 8 stores × 184 days × 2 years (2024 + 2025) |
 | `department_daily_metrics.parquet` | 29,414 × 7 | Same window across 10 departments per store-day |
-| `anomaly_flags.parquet` | 983 × 9 | 950 info, 33 warning, 0 critical |
+| `anomaly_flags.parquet` | 883 × 9 | 807 info, 76 warning, 0 critical |
 | `dim_stores.parquet` | 8 × 10 | One row per store |
 
-The paired-year canonical (added in a recent phase) contains both 2024 and 2025 windows. Filtering `store_daily_metrics.parquet` to the 2025 window yields 1,472 rows (the original single-year canonical baseline). The 2024 window enables year-over-year comparison views in the portal's store drilldown via the existing `start_date` / `end_date` filters; no new endpoints were needed.
+The canonical covers a paired-year window: 184 days × 2 years (2024-07-01 through 2024-12-31 and 2025-07-01 through 2025-12-31). Filtering `store_daily_metrics.parquet` to the 2025 window alone yields 1,472 rows. The 2024 window enables year-over-year comparison views in the portal's store drilldown via the existing `start_date` / `end_date` filters; no new endpoints were needed.
 
 To refresh: regenerate the canonical parquets in the upstream ETL repo (`scripts/build_canonical_fixtures.py` there), then copy the resulting files into this repo's `app/fixtures/` and commit. The upstream pipeline is byte-deterministic, so successive regenerations against the same window produce identical bytes.
 
@@ -559,6 +560,7 @@ tests/
 ├── test_dashboard.py           # /dashboard-summary envelope and aggregation
 ├── test_department_metrics.py  # /department-metrics endpoint and filters
 ├── test_dim_stores.py          # /dim-stores endpoint, ZIP/FIPS string coercion
+├── test_etl_contract.py        # ETL canonical parquet → API served values contract
 ├── test_observability.py       # Structlog configurator, ExtraAdder bridge
 ├── test_prometheus_metrics.py  # /metrics endpoint, custom counter wiring
 └── test_request_correlation.py # X-Request-ID middleware, contextvars binding
@@ -585,7 +587,7 @@ This API reads from both schemas but never writes. Adding a new data source mean
 
 ## Deployment
 
-The repository ships a `Dockerfile` that produces a self-contained image of the API. The image bundles the grocery parquet fixtures from `app/fixtures/`, so the grocery routes (`/store-metrics`, `/anomalies`, `/department-metrics`, `/dim-stores`, `/dashboard-summary`) work as soon as the container starts. The macro routes (`/series`, `/metrics/*`, `/insights/*`) require a reachable PostgreSQL — connection details are read from the `DB_*` environment variables at runtime, never baked into the image.
+The repository ships a `Dockerfile` that produces a self-contained image of the API. The image bundles the grocery parquet fixtures from `app/fixtures/`, so the grocery routes (`/store-metrics`, `/anomalies`, `/dashboard-summary`, `/department-metrics`, `/dim-stores`) work as soon as the container starts. The macro routes (`/series`, `/metrics/*`, `/insights/*`) require a reachable PostgreSQL — connection details are read from the `DB_*` environment variables at runtime, never baked into the image.
 
 The Dockerfile is target-agnostic: it runs on plain Docker hosts, Railway, Render, Fly.io, AWS ECS, Google Cloud Run, or Kubernetes. Port and worker count are configurable via `PORT` and `WORKERS` env vars so platform-as-a-service injection patterns work without modification.
 
