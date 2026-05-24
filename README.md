@@ -278,7 +278,7 @@ Component-level liveness and readiness check. Reports the grocery and macro pipe
 
 #### `GET /series`
 
-List all available series with metadata (id, name, source, latest date, latest value).
+Paginated list of available series with metadata (id, name, source).
 
 #### `GET /series/{series_id}`
 
@@ -502,10 +502,10 @@ Current canonical contents:
 |---|---:|---|
 | `store_daily_metrics.parquet` | 2,944 × 6 | 8 stores × 184 days × 2 years (2024 + 2025) |
 | `department_daily_metrics.parquet` | 29,414 × 7 | Same window across 10 departments per store-day |
-| `anomaly_flags.parquet` | 983 × 9 | 950 info, 33 warning, 0 critical |
+| `anomaly_flags.parquet` | 883 × 9 | 807 info, 76 warning, 0 critical |
 | `dim_stores.parquet` | 8 × 10 | One row per store |
 
-The paired-year canonical (added in a recent phase) contains both 2024 and 2025 windows. Filtering `store_daily_metrics.parquet` to the 2025 window yields 1,472 rows (the original single-year canonical baseline). The 2024 window enables year-over-year comparison views in the portal's store drilldown via the existing `start_date` / `end_date` filters; no new endpoints were needed.
+The canonical covers a paired-year window: 184 days × 2 years (2024-07-01 through 2024-12-31 and 2025-07-01 through 2025-12-31). Filtering `store_daily_metrics.parquet` to the 2025 window alone yields 1,472 rows. The 2024 window enables year-over-year comparison views in the portal's store drilldown via the existing `start_date` / `end_date` filters; no new endpoints were needed.
 
 To refresh: regenerate the canonical parquets in the upstream ETL repo (`scripts/build_canonical_fixtures.py` there), then copy the resulting files into this repo's `app/fixtures/` and commit. The upstream pipeline is byte-deterministic, so successive regenerations against the same window produce identical bytes.
 
