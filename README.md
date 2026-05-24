@@ -181,7 +181,7 @@ The `/metrics` endpoint is unauthenticated. Production deployments should restri
 ## Testing
 
 ```bash
-pytest                  # all 122 tests
+pytest                  # all 135 tests
 pytest -v               # verbose
 pytest tests/test_metrics.py   # single file
 pytest --cov=app        # with coverage
@@ -189,7 +189,7 @@ pytest --cov=app        # with coverage
 
 The test suite makes no live database connections and no network calls. Service-layer functions are patched via `unittest.mock.patch` so endpoint tests assert on response shapes without touching parquet files or the database. Service-layer tests use synthetic DataFrames built in-memory.
 
-The 13 test files:
+The 14 test files:
 
 | File | Tests | Coverage |
 |---|---:|---|
@@ -199,10 +199,11 @@ The 13 test files:
 | `test_insights.py` | 4 | `/insights/summary` |
 | `test_grocery_service.py` | 24 | Service layer — parquet IO, filtering, pagination |
 | `test_store_metrics.py` | 10 | `/store-metrics` endpoint and pagination envelope |
-| `test_anomalies.py` | 13 | `/anomalies` endpoint, all filter parameters |
+| `test_anomalies.py` | 17 | `/anomalies` endpoint, all filter parameters |
 | `test_dashboard.py` | 9 | `/dashboard-summary` envelope and aggregation |
 | `test_department_metrics.py` | 9 | `/department-metrics` endpoint and filters |
 | `test_dim_stores.py` | 7 | `/dim-stores` endpoint, ZIP/FIPS string coercion |
+| `test_etl_contract.py` | 4 | Byte-identical fixture contract: ETL canonical parquet → API served values |
 | `test_observability.py` | 4 | structlog configurator, ExtraAdder bridge |
 | `test_prometheus_metrics.py` | 3 | `/metrics` endpoint, custom counter wiring |
 | `test_request_correlation.py` | 3 | X-Request-ID middleware, contextvars binding |
@@ -559,6 +560,7 @@ tests/
 ├── test_dashboard.py           # /dashboard-summary envelope and aggregation
 ├── test_department_metrics.py  # /department-metrics endpoint and filters
 ├── test_dim_stores.py          # /dim-stores endpoint, ZIP/FIPS string coercion
+├── test_etl_contract.py        # ETL canonical parquet → API served values contract
 ├── test_observability.py       # Structlog configurator, ExtraAdder bridge
 ├── test_prometheus_metrics.py  # /metrics endpoint, custom counter wiring
 └── test_request_correlation.py # X-Request-ID middleware, contextvars binding
