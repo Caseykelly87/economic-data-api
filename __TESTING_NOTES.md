@@ -65,7 +65,7 @@ The load-bearing read/serve logic and the tests that hold it.
 - **Parquet reading** — `test_grocery_service.py`. `load_store_metrics_df`
   and `load_anomaly_flags_df` read the resolved parquet and return a
   DataFrame with the canonical schema, the canonical row count (2944 store
-  metrics, 831 anomaly flags), and `datetime.date` objects in the `date`
+  metrics, 883 anomaly flags), and `datetime.date` objects in the `date`
   column. The missing-path branch raises `FileNotFoundError`
   (`test_load_*_raises_when_path_missing`).
 - **Schema enforcement** — `test_etl_contract.py::
@@ -176,7 +176,8 @@ Coverage by mode after this pass:
 
 ## Test categories observed
 
-The suite held 126 tests at the start of this pass. Classification:
+Snapshot from the test-quality pass on 2026-05-21 — the suite held 126
+tests at the start and 130 at the end of that pass. Classification:
 
 | Category             | At start | After pass |
 |----------------------|----------|------------|
@@ -185,6 +186,14 @@ The suite held 126 tests at the start of this pass. Classification:
 | Ceremony             | 2        | 2          |
 | Uncategorizable      | 0        | 0          |
 | Total                | 126      | 130        |
+
+Current suite size (verified 2026-05-24): 135 tests. The five tests added
+since the snapshot live in `test_health.py`, covering the per-pipeline
+reporting shape introduced when `/health` was split into independent
+grocery and macro sub-objects. They are structural — the endpoint's
+status and reason fields are not derived quantities. The split above
+remains directionally accurate; see `README.md` for the current
+per-file breakdown.
 
 The suite is structural-heavy by construction: most route test modules mock
 the service layer, so they can only assert dispatch wiring and response
@@ -230,12 +239,11 @@ strengthened:
 
 No production bugs were discovered while strengthening the targeted tests.
 Every strengthened test passes against the current code. One documentation
-drift was noted and left for separate work: the docstring in
-`app/api/routes/department_metrics.py` describes the canonical dataset as
-"14,706 rows covering 2025-07-01 through 2025-12-31", whereas the bundled
-parquet holds 29,414 rows covering 2024-07-01 through 2025-12-31. This is a
-stale docstring, not a behavioral defect, and fixing it would be a
-production-code change outside this pass's scope.
+drift was noted and addressed in a follow-up commit (700806c): the
+`app/api/routes/department_metrics.py` docstring previously described the
+canonical dataset as "14,706 rows covering 2025-07-01 through 2025-12-31";
+it now reports 29,414 rows covering 2024-07-01 through 2025-12-31, in line
+with the bundled parquet.
 
 ## For downstream phases
 
