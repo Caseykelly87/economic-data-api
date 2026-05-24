@@ -65,7 +65,7 @@ The load-bearing read/serve logic and the tests that hold it.
 - **Parquet reading** — `test_grocery_service.py`. `load_store_metrics_df`
   and `load_anomaly_flags_df` read the resolved parquet and return a
   DataFrame with the canonical schema, the canonical row count (2944 store
-  metrics, 883 anomaly flags), and `datetime.date` objects in the `date`
+  metrics, 894 anomaly flags), and `datetime.date` objects in the `date`
   column. The missing-path branch raises `FileNotFoundError`
   (`test_load_*_raises_when_path_missing`).
 - **Schema enforcement** — `test_etl_contract.py::
@@ -125,8 +125,13 @@ contract fixture is captured: the bundled parquets *are* the upstream
 contract. The ETL produces byte-identical parquet output for identical
 input, so a committed parquet is a stable contract input.
 
-The four tests assert:
+The five tests assert:
 
+- **`test_bundled_fixture_matches_canonical_sha256`** — each of the four
+  bundled parquets' SHA-256 hashes match a hardcoded reference captured
+  at the upstream ETL boundary. Drift in any direction — stale fixture,
+  corrupted copy, inadvertent re-encode — fails the test with the
+  offending filename in the parametrize ID.
 - **`test_api_serves_canonical_store_day_values`** — `/store-metrics` for a
   known store-day returns the exact `total_sales` and `transaction_count`
   read off the canonical parquet.
@@ -187,13 +192,19 @@ tests at the start and 130 at the end of that pass. Classification:
 | Uncategorizable      | 0        | 0          |
 | Total                | 126      | 130        |
 
-Current suite size (verified 2026-05-24): 135 tests. The five tests added
-since the snapshot live in `test_health.py`, covering the per-pipeline
-reporting shape introduced when `/health` was split into independent
-grocery and macro sub-objects. They are structural — the endpoint's
-status and reason fields are not derived quantities. The split above
-remains directionally accurate; see `README.md` for the current
-per-file breakdown.
+Current suite size (verified 2026-05-24): 141 tests. Six were added in
+the canonical-refresh pass: four parametrized cases pinning each bundled
+fixture's SHA-256 to the upstream ETL canonical (in
+`test_etl_contract.py`, business-correctness — each asserts an
+independently captured hash, not a re-hash of the same bytes), and two
+parametrized cases extending the route-level `rule_id` matrix in
+`test_anomalies.py` to cover `department_coverage` and
+`revenue_zscore_28d`. Five earlier additions live in `test_health.py`,
+covering the per-pipeline reporting shape introduced when `/health` was
+split into independent grocery and macro sub-objects; those are
+structural — the endpoint's status and reason fields are not derived
+quantities. The split above remains directionally accurate; see
+`README.md` for the current per-file breakdown.
 
 The suite is structural-heavy by construction: most route test modules mock
 the service layer, so they can only assert dispatch wiring and response
