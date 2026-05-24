@@ -484,6 +484,71 @@ Single request that returns aggregated totals, top stores by revenue, exception 
 
 ---
 
+### 4.10 `GET /department-metrics` — Paginated department-grain rows
+
+Rows from `department_daily_metrics` at the store-day-department grain (one row per `(date, store_id, department_id)`) with date, store, and department filters and pagination.
+
+**Query parameters** (all optional)
+
+| Param | Type | Default | Constraints | Description |
+|---|---|---|---|---|
+| `start_date` | `YYYY-MM-DD` | — | — | Include rows on or after this date (inclusive) |
+| `end_date` | `YYYY-MM-DD` | — | — | Include rows on or before this date (inclusive) |
+| `store_id` | integer | — | 1–8 | Filter to a single store |
+| `department_id` | integer | — | 1–10 | Filter to a single department |
+| `limit` | integer | `50` | 1–200 | Items per page |
+| `offset` | integer | `0` | ≥ 0 | Items to skip |
+
+**Response `200`**
+
+```json
+{
+  "total": 310,
+  "limit": 50,
+  "offset": 0,
+  "items": [
+    {
+      "date": "2025-07-01",
+      "store_id": 3,
+      "department_id": 1,
+      "net_sales": 9847.22,
+      "transactions": 252,
+      "units_sold": 814,
+      "gross_margin_pct": 0.46
+    }
+  ]
+}
+```
+
+---
+
+### 4.11 `GET /dim-stores` — Store reference data
+
+Flat array of all 8 stores' dimension rows. No pagination — the dataset is tiny. No query parameters. Rows are sorted by `store_id`.
+
+**Response `200`**
+
+```json
+[
+  {
+    "store_id": 1,
+    "store_name": "Knot Shore — Kirkwood",
+    "address": "10250 Manchester Rd",
+    "city": "Kirkwood",
+    "zip": "63122",
+    "county_fips": "29189",
+    "trade_area_profile": "suburban-family",
+    "sqft": 45000,
+    "open_date": "2009-04-15",
+    "base_daily_revenue": 95000.0
+  }
+]
+```
+
+`zip` and `county_fips` are returned as 5-character zero-padded strings, not integers — they are identifiers and storing them as strings preserves leading zeros. `trade_area_profile` is one of `suburban-family`, `urban-dense`, or `value-market`. `open_date` is ISO format (`YYYY-MM-DD`).
+
+---
+
 ## 5. Recommended Request Patterns
 
 ### Dashboard overview page
@@ -565,14 +630,17 @@ API — use them to verify request/response shapes during development.
 
 The API ships with a bundled demo dataset so it works out of the box on a
 fresh clone. The grocery endpoints (`/store-metrics`, `/anomalies`,
-`/dashboard-summary`) auto-detect their data source on every request:
+`/dashboard-summary`, `/department-metrics`, `/dim-stores`) auto-detect
+their data source on every request:
 
-- **Live mode** — the operator has set `STORE_METRICS_PATH` and
-  `ANOMALY_FLAGS_PATH` to readable parquet files (typically the upstream
-  ETL's `data/processed/` output). The API serves real data.
-- **Demo mode** — those env vars are unset or unreadable. The API falls
-  back to bundled fixture parquets in `app/fixtures/`, logs a startup
-  WARNING, and reports `grocery_pipeline.mode: "offline"` on `/health`.
+- **Live mode** — the operator has set all four of `STORE_METRICS_PATH`,
+  `ANOMALY_FLAGS_PATH`, `DEPARTMENT_METRICS_PATH`, and `DIM_STORES_PATH`
+  to readable parquet files (typically the upstream ETL's
+  `data/processed/canonical/` output). The API serves real data.
+- **Demo mode** — one or more of those env vars are unset or unreadable.
+  The API falls back to bundled fixture parquets in `app/fixtures/`, logs
+  a startup WARNING, and reports `grocery_pipeline.mode: "offline"` on
+  `/health`.
 
 The `grocery_pipeline.mode` field on `/health` is the authoritative signal
 of which mode is active. From a frontend perspective the JSON shape is
@@ -582,14 +650,15 @@ a safety check when verifying a deployment ("am I really pointing at the
 live ETL?").
 
 **The demo dataset is real pipeline output.** It is a byte-identical
-snapshot of a 184-day canonical run of the upstream sim engine + ETL
-pipeline (2025-07-01 through 2025-12-31, eight Knot Shore-style stores).
-The sim engine generates synthetic store-day data, the ETL ingests it
-and runs anomaly detection, and the resulting parquets are committed to
-this repo as the bundled fixtures. Treat these values as representative
-of the response shape and dynamic range your UI must handle, but not as
-production reference for any business decision — the underlying
-operational data is itself synthetic.
+snapshot of a paired-year canonical run of the upstream sim engine + ETL
+pipeline — 184 days × 2 years (2024-07-01 through 2024-12-31 and
+2025-07-01 through 2025-12-31), eight Knot Shore-style stores, ten
+departments per store. The sim engine generates synthetic store-day
+data, the ETL ingests it and runs anomaly detection, and the resulting
+parquets are committed to this repo as the bundled fixtures. Treat these
+values as representative of the response shape and dynamic range your UI
+must handle, but not as production reference for any business decision —
+the underlying operational data is itself synthetic.
 
-Switching to live data is purely an operator concern: set the two env vars
-and restart the API. No frontend code change is required.
+Switching to live data is purely an operator concern: set the four env
+vars and restart the API. No frontend code change is required.
