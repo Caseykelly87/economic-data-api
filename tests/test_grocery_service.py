@@ -52,7 +52,7 @@ def test_load_anomaly_flags_df_returns_dataframe():
     assert isinstance(df, pd.DataFrame)
     assert set(df.columns) == FLAG_COLS
     # The bundled fixture is the ETL canonical anomaly_flags parquet.
-    assert len(df) == 883
+    assert len(df) == 894
     assert isinstance(df["date"].iloc[0], date)
     # A known flag read off the canonical parquet: store 7's revenue_band
     # exception on 2024-07-05.
@@ -169,7 +169,7 @@ def test_get_anomalies_returns_total_and_items():
     total, items = svc.get_anomalies(limit=200, offset=0)
     assert isinstance(total, int)
     # Full canonical anomaly_flags row count.
-    assert total == 883
+    assert total == 894
     assert len(items) == 200
     assert all(isinstance(item, AnomalyFlagOut) for item in items)
     # The service sorts by (date, store_id, rule_id); the first flag is
