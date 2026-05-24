@@ -587,7 +587,7 @@ This API reads from both schemas but never writes. Adding a new data source mean
 
 ## Deployment
 
-The repository ships a `Dockerfile` that produces a self-contained image of the API. The image bundles the grocery parquet fixtures from `app/fixtures/`, so the grocery routes (`/store-metrics`, `/anomalies`, `/department-metrics`, `/dim-stores`, `/dashboard-summary`) work as soon as the container starts. The macro routes (`/series`, `/metrics/*`, `/insights/*`) require a reachable PostgreSQL — connection details are read from the `DB_*` environment variables at runtime, never baked into the image.
+The repository ships a `Dockerfile` that produces a self-contained image of the API. The image bundles the grocery parquet fixtures from `app/fixtures/`, so the grocery routes (`/store-metrics`, `/anomalies`, `/dashboard-summary`, `/department-metrics`, `/dim-stores`) work as soon as the container starts. The macro routes (`/series`, `/metrics/*`, `/insights/*`) require a reachable PostgreSQL — connection details are read from the `DB_*` environment variables at runtime, never baked into the image.
 
 The Dockerfile is target-agnostic: it runs on plain Docker hosts, Railway, Render, Fly.io, AWS ECS, Google Cloud Run, or Kubernetes. Port and worker count are configurable via `PORT` and `WORKERS` env vars so platform-as-a-service injection patterns work without modification.
 
