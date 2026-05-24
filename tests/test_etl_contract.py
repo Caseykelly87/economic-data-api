@@ -17,10 +17,13 @@ The ``client`` fixture overrides only the database dependency; the grocery
 service is left live, so these tests run the real four-path resolution,
 ``pd.read_parquet`` call, schema coercion, and response shaping.
 """
+import hashlib
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from shutil import copyfile
 from unittest.mock import patch
+
+import pytest
 
 from app.core.config import settings
 
@@ -40,6 +43,22 @@ CANONICAL_FILES = {
     "DIM_STORES_PATH": "dim_stores.parquet",
 }
 
+# SHA-256 of each bundled fixture, copied verbatim from the upstream ETL's
+# data/processed/canonical/ output after the revenue_zscore_28d rule merge
+# (economic-data-etl PR #25, merged 2026-05). These are the authoritative
+# hashes for the contract — independently computed at the ETL boundary,
+# pinned here so the test catches drift instead of co-computing both sides.
+EXPECTED_FIXTURE_SHA256 = {
+    "store_daily_metrics.parquet":
+        "2ba24c7423ee7da2bccab3ba87765c77653c34955c565c9c66e1e49fa56b13a5",
+    "department_daily_metrics.parquet":
+        "bfe2a09525956d64c31fac91276140a433bd62466da837da78119ddd1be1f3ba",
+    "dim_stores.parquet":
+        "39ecd78ca98a23cafe57c7739755b250ae09ff32529459fae5440d61758e2125",
+    "anomaly_flags.parquet":
+        "f52a8d56b8a0e63fc8d1d0a5aff340795be88f05efa0db168fc204f20e6f8b0a",
+}
+
 
 @contextmanager
 def _patched_settings(overrides):
@@ -48,6 +67,30 @@ def _patched_settings(overrides):
         for name, value in overrides.items():
             stack.enter_context(patch.object(settings, name, value))
         yield
+
+
+@pytest.mark.parametrize(
+    "filename,expected_sha256",
+    sorted(EXPECTED_FIXTURE_SHA256.items()),
+)
+def test_bundled_fixture_matches_canonical_sha256(filename, expected_sha256):
+    """Each bundled parquet's SHA-256 matches the ETL canonical reference.
+
+    Business-correctness: the assertion compares a freshly computed SHA-256
+    of the bundled file against a hash captured independently at the ETL
+    boundary, not against a re-hash of the same bytes. Drift in any
+    direction — a stale fixture, a corrupted copy, an inadvertent
+    re-encode — fails the test with the offending filename in the
+    parametrize ID.
+    """
+    fixtures_dir = Path(settings.GROCERY_FIXTURES_DIR)
+    fixture_path = fixtures_dir / filename
+    assert fixture_path.is_file(), f"Fixture missing: {fixture_path}"
+    actual_sha256 = hashlib.sha256(fixture_path.read_bytes()).hexdigest()
+    assert actual_sha256 == expected_sha256, (
+        f"{filename} drifted from ETL canonical. "
+        f"Expected {expected_sha256}, got {actual_sha256}."
+    )
 
 
 def test_api_serves_canonical_store_day_values(client):
