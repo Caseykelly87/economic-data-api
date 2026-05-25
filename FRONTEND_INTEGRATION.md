@@ -402,7 +402,7 @@ Rows from `anomaly_flags` (one row per detected exception) with date, store, sev
 | `end_date` | `YYYY-MM-DD` | — | — | Include rows on or before this date |
 | `store_id` | integer | — | 1–8 | Filter to a single store |
 | `severity_level` | string | — | `info` / `warning` / `critical` | Filter to a severity level. Unknown values return 422. |
-| `rule_id` | string | — | `revenue_band` / `labor_pct_band` / `avg_ticket_band` / `transactions_band` / `yoy_comp` | Filter to a detection rule. Unknown values return 422. |
+| `rule_id` | string | — | `revenue_band` / `labor_pct_band` / `avg_ticket_band` / `transactions_band` / `yoy_comp` / `department_coverage` / `revenue_zscore_28d` | Filter to a detection rule. Unknown values return 422. |
 | `limit` | integer | `50` | 1–200 | Items per page |
 | `offset` | integer | `0` | ≥ 0 | Items to skip |
 
@@ -430,6 +430,8 @@ Rows from `anomaly_flags` (one row per detected exception) with date, store, sev
 ```
 
 `severity_score` is a unitless ratio of how far the actual value sits beyond the expected band, expressed in band-widths. Use `severity_level` for display bucketing rather than thresholding `severity_score` yourself — the bucket boundaries may shift in future detection releases.
+
+`revenue_zscore_28d` is a drift detector rather than a band check: it flags a store-day where the day's revenue sits at least 2.5 standard deviations from a 28-day rolling mean of that store's recent revenue. Severity is bucketed by absolute z: `info` from 2.5 to 3, `warning` from 3 to 4, `critical` above 4. The first 14 days of each store's series are skipped silently for lack of history, the same cold-start handling `yoy_comp` uses for dates without a T-365 row.
 
 ---
 

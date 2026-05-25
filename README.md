@@ -181,7 +181,7 @@ The `/metrics` endpoint is unauthenticated. Production deployments should restri
 ## Testing
 
 ```bash
-pytest                  # all 135 tests
+pytest                  # all 141 tests
 pytest -v               # verbose
 pytest tests/test_metrics.py   # single file
 pytest --cov=app        # with coverage
@@ -199,11 +199,11 @@ The 14 test files:
 | `test_insights.py` | 4 | `/insights/summary` |
 | `test_grocery_service.py` | 24 | Service layer — parquet IO, filtering, pagination |
 | `test_store_metrics.py` | 10 | `/store-metrics` endpoint and pagination envelope |
-| `test_anomalies.py` | 17 | `/anomalies` endpoint, all filter parameters |
+| `test_anomalies.py` | 19 | `/anomalies` endpoint, all filter parameters |
 | `test_dashboard.py` | 9 | `/dashboard-summary` envelope and aggregation |
 | `test_department_metrics.py` | 9 | `/department-metrics` endpoint and filters |
 | `test_dim_stores.py` | 7 | `/dim-stores` endpoint, ZIP/FIPS string coercion |
-| `test_etl_contract.py` | 4 | Byte-identical fixture contract: ETL canonical parquet → API served values |
+| `test_etl_contract.py` | 8 | Byte-identical fixture contract: SHA-256 pinning and ETL canonical parquet → API served values |
 | `test_observability.py` | 4 | structlog configurator, ExtraAdder bridge |
 | `test_prometheus_metrics.py` | 3 | `/metrics` endpoint, custom counter wiring |
 | `test_request_correlation.py` | 3 | X-Request-ID middleware, contextvars binding |
@@ -397,7 +397,7 @@ Paginated store-day metric rows. Filterable by `start_date`, `end_date`, `store_
 
 #### `GET /anomalies`
 
-Paginated detection flags. Filterable by `start_date`, `end_date`, `store_id`, `severity_level` (`info` / `warning` / `critical`), and `rule_id` (`revenue_band` / `labor_pct_band` / `avg_ticket_band` / `transactions_band` / `yoy_comp`). Standard envelope.
+Paginated detection flags. Filterable by `start_date`, `end_date`, `store_id`, `severity_level` (`info` / `warning` / `critical`), and `rule_id` (`revenue_band` / `labor_pct_band` / `avg_ticket_band` / `transactions_band` / `yoy_comp` / `department_coverage` / `revenue_zscore_28d`). Standard envelope.
 
 #### `GET /dashboard-summary`
 
@@ -502,7 +502,7 @@ Current canonical contents:
 |---|---:|---|
 | `store_daily_metrics.parquet` | 2,944 × 6 | 8 stores × 184 days × 2 years (2024 + 2025) |
 | `department_daily_metrics.parquet` | 29,414 × 7 | Same window across 10 departments per store-day |
-| `anomaly_flags.parquet` | 883 × 9 | 807 info, 76 warning, 0 critical |
+| `anomaly_flags.parquet` | 894 × 9 | 815 info, 78 warning, 1 critical |
 | `dim_stores.parquet` | 8 × 10 | One row per store |
 
 The canonical covers a paired-year window: 184 days × 2 years (2024-07-01 through 2024-12-31 and 2025-07-01 through 2025-12-31). Filtering `store_daily_metrics.parquet` to the 2025 window alone yields 1,472 rows. The 2024 window enables year-over-year comparison views in the portal's store drilldown via the existing `start_date` / `end_date` filters; no new endpoints were needed.

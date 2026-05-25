@@ -89,6 +89,8 @@ def test_anomalies_severity_filter_forwarded(client):
         "avg_ticket_band",
         "transactions_band",
         "yoy_comp",
+        "department_coverage",
+        "revenue_zscore_28d",
     ],
 )
 def test_anomalies_rule_filter_forwarded(client, rule_id):
