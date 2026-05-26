@@ -174,7 +174,6 @@ def health_check(db: Session = Depends(get_db)):
             "health_macro_db_check_failed",
             error=str(exc),
             error_type=type(exc).__name__,
-            exc_info=True,
         )
         macro = {"status": "unavailable", "reason": "database unreachable"}
 
