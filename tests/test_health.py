@@ -115,3 +115,34 @@ def test_health_macro_pipeline_unavailable_when_db_down(client, mock_db):
 
 def test_health_macro_pipeline_omits_reason_when_healthy(client):
     assert "reason" not in client.get("/health").json()["macro_pipeline"]
+
+
+# --- log noise: the probe warning carries no traceback -------------------
+
+def test_health_macro_db_failure_log_carries_no_traceback(client, mock_db):
+    """Business-correctness: the macro DB probe warning, on a failed
+    SELECT 1, must log the structured error and error_type fields but
+    must not pass exc_info=True. Docker runs /health every 10s by default
+    and the macro DB is intentionally unreachable in offline development
+    and demo deployments; exc_info=True attached a ~30-line traceback to
+    every probe warning. The trace adds no diagnostic value beyond the
+    structured fields, so it was removed. This test pins that decision.
+    """
+    mock_db.execute.side_effect = Exception("Connection refused")
+
+    with patch("app.main.logger") as mock_logger:
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "degraded"
+
+    probe_warnings = [
+        call for call in mock_logger.warning.call_args_list
+        if call.args and call.args[0] == "health_macro_db_check_failed"
+    ]
+    assert len(probe_warnings) == 1, "expected exactly one DB probe warning"
+
+    kwargs = probe_warnings[0].kwargs
+    assert "exc_info" not in kwargs
+    assert kwargs["error"] == "Connection refused"
+    assert kwargs["error_type"] == "Exception"
