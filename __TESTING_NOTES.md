@@ -192,14 +192,17 @@ tests at the start and 130 at the end of that pass. Classification:
 | Uncategorizable      | 0        | 0          |
 | Total                | 126      | 130        |
 
-Current suite size (verified 2026-05-24): 141 tests. Six were added in
+Current suite size (verified 2026-05-26): 142 tests. Six were added in
 the canonical-refresh pass: four parametrized cases pinning each bundled
 fixture's SHA-256 to the upstream ETL canonical (in
 `test_etl_contract.py`, business-correctness — each asserts an
 independently captured hash, not a re-hash of the same bytes), and two
 parametrized cases extending the route-level `rule_id` matrix in
 `test_anomalies.py` to cover `department_coverage` and
-`revenue_zscore_28d`. Five earlier additions live in `test_health.py`,
+`revenue_zscore_28d`. A follow-on commit pinned the macro DB probe
+warning to carry no traceback (business-correctness, asserts the
+formatted log record), bringing the total to 142. Five earlier
+additions live in `test_health.py`,
 covering the per-pipeline reporting shape introduced when `/health` was
 split into independent grocery and macro sub-objects; those are
 structural — the endpoint's status and reason fields are not derived

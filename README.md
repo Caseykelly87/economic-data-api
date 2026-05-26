@@ -181,7 +181,7 @@ The `/metrics` endpoint is unauthenticated. Production deployments should restri
 ## Testing
 
 ```bash
-pytest                  # all 141 tests
+pytest                  # all 142 tests
 pytest -v               # verbose
 pytest tests/test_metrics.py   # single file
 pytest --cov=app        # with coverage
