@@ -1,3 +1,4 @@
+from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -106,4 +107,19 @@ class Settings(BaseSettings):
         return str(Path(self.resolved_store_metrics_path).parent)
 
 
-settings = Settings()
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """Return the process-wide Settings instance, constructed lazily on
+    first call and memoized thereafter."""
+    return Settings()
+
+
+def __getattr__(name: str):
+    """Module-level shim so ``from app.core.config import settings``
+    continues to work after the move to lazy instantiation. Python invokes
+    this when a module attribute is not found by normal lookup; here it
+    resolves ``settings`` to the cached Settings instance on first
+    access."""
+    if name == "settings":
+        return get_settings()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

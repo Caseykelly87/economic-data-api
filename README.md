@@ -181,7 +181,7 @@ The `/metrics` endpoint is unauthenticated. Production deployments should restri
 ## Testing
 
 ```bash
-pytest                  # all 151 tests
+pytest                  # all 154 tests
 pytest -v               # verbose
 pytest tests/test_metrics.py   # single file
 pytest --cov=app        # with coverage
@@ -189,10 +189,11 @@ pytest --cov=app        # with coverage
 
 The test suite makes no live database connections and no network calls. Service-layer functions are patched via `unittest.mock.patch` so endpoint tests assert on response shapes without touching parquet files or the database. Service-layer tests use synthetic DataFrames built in-memory.
 
-The 14 test files:
+The 15 test files:
 
 | File | Tests | Coverage |
 |---|---:|---|
+| `test_config.py` | 3 | Lazy Settings lifecycle and import shim |
 | `test_health.py` | 15 | `/health` endpoint, component-level pipeline status |
 | `test_series.py` | 13 | `/series` and `/series/{series_id}` |
 | `test_metrics.py` | 13 | `/metrics/inflation`, `/metrics/unemployment`, `/metrics/gdp` |
