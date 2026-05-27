@@ -199,7 +199,7 @@ tests at the start and 130 at the end of that pass. Classification:
 | Uncategorizable      | 0        | 0          |
 | Total                | 126      | 130        |
 
-Current suite size (verified 2026-05-27): 154 tests. Six were added in
+Current suite size (verified 2026-05-27): 160 tests. Six were added in
 the canonical-refresh pass: four parametrized cases pinning each bundled
 fixture's SHA-256 to the upstream ETL canonical (in
 `test_etl_contract.py`, business-correctness — each asserts an
@@ -214,7 +214,10 @@ covering X-Request-ID header validation (oversized, malformed,
 uppercase, length-cap-overflow shapes), bringing the total to 151;
 the same pass added three `test_config.py` cases pinning the lazy
 Settings lifecycle and the module-level import shim, bringing the
-total to 154. Five earlier
+total to 154; the same pass added six `test_grocery_service.py` cases
+pinning parquet read caching (per-loader cache, cache-clear helper,
+and cache re-keying on resolved-path change), bringing the total to
+160. Five earlier
 additions live in `test_health.py`,
 covering the per-pipeline reporting shape introduced when `/health` was
 split into independent grocery and macro sub-objects; those are

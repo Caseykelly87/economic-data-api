@@ -181,7 +181,7 @@ The `/metrics` endpoint is unauthenticated. Production deployments should restri
 ## Testing
 
 ```bash
-pytest                  # all 154 tests
+pytest                  # all 160 tests
 pytest -v               # verbose
 pytest tests/test_metrics.py   # single file
 pytest --cov=app        # with coverage
@@ -198,7 +198,7 @@ The 15 test files:
 | `test_series.py` | 13 | `/series` and `/series/{series_id}` |
 | `test_metrics.py` | 13 | `/metrics/inflation`, `/metrics/unemployment`, `/metrics/gdp` |
 | `test_insights.py` | 4 | `/insights/summary` |
-| `test_grocery_service.py` | 24 | Service layer — parquet IO, filtering, pagination |
+| `test_grocery_service.py` | 30 | Service layer — parquet IO, filtering, pagination, read caching |
 | `test_store_metrics.py` | 10 | `/store-metrics` endpoint and pagination envelope |
 | `test_anomalies.py` | 19 | `/anomalies` endpoint, all filter parameters |
 | `test_dashboard.py` | 9 | `/dashboard-summary` envelope and aggregation |

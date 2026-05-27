@@ -2,6 +2,7 @@
 configured via app.core.config.settings.resolved_*_path properties.
 """
 from datetime import date
+from functools import lru_cache
 from pathlib import Path
 
 import pandas as pd
@@ -29,6 +30,46 @@ logger = structlog.get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Parquet loaders
 # ---------------------------------------------------------------------------
+#
+# Each public loader resolves its path through settings (so the four-path
+# offline/online fallback applies), guards against a missing file, and
+# delegates the read to a per-path lru_cache-wrapped private loader. The
+# cache key is the resolved-path string: when a test or a redeploy flips
+# the env var, the resolved path changes and the cache naturally serves
+# the new file without a manual clear. The cached DataFrames must not be
+# mutated by callers; consumers that filter take an explicit .copy()
+# before any in-place operation. _clear_grocery_caches() is exposed for
+# tests that need to assert disk reads happened.
+
+
+@lru_cache(maxsize=1)
+def _load_store_metrics_df_cached(path: str) -> pd.DataFrame:
+    return pd.read_parquet(path)
+
+
+@lru_cache(maxsize=1)
+def _load_anomaly_flags_df_cached(path: str) -> pd.DataFrame:
+    return pd.read_parquet(path)
+
+
+@lru_cache(maxsize=1)
+def _load_department_metrics_df_cached(path: str) -> pd.DataFrame:
+    return pd.read_parquet(path)
+
+
+@lru_cache(maxsize=1)
+def _load_dim_stores_df_cached(path: str) -> pd.DataFrame:
+    return pd.read_parquet(path)
+
+
+def _clear_grocery_caches() -> None:
+    """Clear the four parquet read caches. For tests that flip the
+    resolved path settings and need the next read to hit disk fresh."""
+    _load_store_metrics_df_cached.cache_clear()
+    _load_anomaly_flags_df_cached.cache_clear()
+    _load_department_metrics_df_cached.cache_clear()
+    _load_dim_stores_df_cached.cache_clear()
+
 
 def load_store_metrics_df() -> pd.DataFrame:
     """Read the resolved store_daily_metrics parquet into a DataFrame."""
@@ -42,7 +83,7 @@ def load_store_metrics_df() -> pd.DataFrame:
         source="store_metrics",
         path=str(path),
     )
-    return pd.read_parquet(path)
+    return _load_store_metrics_df_cached(path)
 
 
 def load_anomaly_flags_df() -> pd.DataFrame:
@@ -57,7 +98,7 @@ def load_anomaly_flags_df() -> pd.DataFrame:
         source="anomaly_flags",
         path=str(path),
     )
-    return pd.read_parquet(path)
+    return _load_anomaly_flags_df_cached(path)
 
 
 def load_department_metrics_df() -> pd.DataFrame:
@@ -72,7 +113,7 @@ def load_department_metrics_df() -> pd.DataFrame:
         source="department_metrics",
         path=str(path),
     )
-    return pd.read_parquet(path)
+    return _load_department_metrics_df_cached(path)
 
 
 def load_dim_stores_df() -> pd.DataFrame:
@@ -87,7 +128,7 @@ def load_dim_stores_df() -> pd.DataFrame:
         source="dim_stores",
         path=str(path),
     )
-    return pd.read_parquet(path)
+    return _load_dim_stores_df_cached(path)
 
 
 def _filter_dates(df: pd.DataFrame, start_date, end_date) -> pd.DataFrame:
@@ -122,7 +163,9 @@ def get_store_metrics(
     )
     service_call_total.labels(service="get_store_metrics").inc()
     grocery_data_source_total.labels(source=settings.grocery_data_source).inc()
-    df = load_store_metrics_df()
+    # The loaders return a cached DataFrame shared across requests; the
+    # service must not mutate it. Take a defensive copy before filtering.
+    df = load_store_metrics_df().copy()
     df = _filter_dates(df, start_date, end_date)
     if store_id is not None:
         df = df[df["store_id"] == store_id]
@@ -177,7 +220,7 @@ def get_anomalies(
     )
     service_call_total.labels(service="get_anomalies").inc()
     grocery_data_source_total.labels(source=settings.grocery_data_source).inc()
-    df = load_anomaly_flags_df()
+    df = load_anomaly_flags_df().copy()
     df = _filter_dates(df, start_date, end_date)
     if store_id is not None:
         df = df[df["store_id"] == store_id]
@@ -227,8 +270,8 @@ def get_dashboard_summary(
     )
     service_call_total.labels(service="get_dashboard_summary").inc()
     grocery_data_source_total.labels(source=settings.grocery_data_source).inc()
-    metrics = load_store_metrics_df()
-    flags = load_anomaly_flags_df()
+    metrics = load_store_metrics_df().copy()
+    flags = load_anomaly_flags_df().copy()
 
     metrics = _filter_dates(metrics, start_date, end_date)
     flags = _filter_dates(flags, start_date, end_date)
@@ -324,7 +367,7 @@ def get_department_metrics(
     )
     service_call_total.labels(service="get_department_metrics").inc()
     grocery_data_source_total.labels(source=settings.grocery_data_source).inc()
-    df = load_department_metrics_df()
+    df = load_department_metrics_df().copy()
     df = _filter_dates(df, start_date, end_date)
     if store_id is not None:
         df = df[df["store_id"] == store_id]
@@ -370,7 +413,7 @@ def get_dim_stores() -> list[StoreDimensionOut]:
     service_call_total.labels(service="get_dim_stores").inc()
     grocery_data_source_total.labels(source=settings.grocery_data_source).inc()
 
-    df = load_dim_stores_df()
+    df = load_dim_stores_df().copy()
     df = df.sort_values("store_id").reset_index(drop=True)
 
     items: list[StoreDimensionOut] = []
