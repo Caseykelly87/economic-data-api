@@ -181,7 +181,7 @@ The `/metrics` endpoint is unauthenticated. Production deployments should restri
 ## Testing
 
 ```bash
-pytest                  # all 142 tests
+pytest                  # all 151 tests
 pytest -v               # verbose
 pytest tests/test_metrics.py   # single file
 pytest --cov=app        # with coverage
@@ -206,7 +206,7 @@ The 14 test files:
 | `test_etl_contract.py` | 8 | Byte-identical fixture contract: SHA-256 pinning and ETL canonical parquet → API served values |
 | `test_observability.py` | 4 | structlog configurator, ExtraAdder bridge |
 | `test_prometheus_metrics.py` | 3 | `/metrics` endpoint, custom counter wiring |
-| `test_request_correlation.py` | 3 | X-Request-ID middleware, contextvars binding |
+| `test_request_correlation.py` | 12 | X-Request-ID middleware, contextvars binding, header validation |
 
 The Pydantic schemas are themselves a form of test: any service function that returns data not matching its declared schema fails serialization, surfacing the contract violation immediately.
 
