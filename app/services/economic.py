@@ -1,3 +1,10 @@
+# The macro pipeline's per-route call counters (the grocery service's
+# service_call_total / grocery_data_source_total pattern) are intentionally
+# not emitted here. The macro endpoints' request volume in this deployment
+# does not justify per-route counters, and the default
+# prometheus-fastapi-instrumentator request metrics (http_requests_total,
+# http_request_duration_seconds, http_requests_inprogress) already cover
+# the operational signal the grocery counters add on top of.
 from datetime import date, datetime
 
 from sqlalchemy import func, select
@@ -24,13 +31,14 @@ from app.schemas.economic import (
 
 
 def _parse_date(date_str: str) -> date | None:
-    """Parse date string from raw.fact_economic_observations (stored as text)."""
-    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%Y-%m-%dT%H:%M:%S"):
-        try:
-            return datetime.strptime(date_str, fmt).date()
-        except ValueError:
-            continue
-    return None
+    """Parse date string from raw.fact_economic_observations (stored as text).
+    The ETL writes ISO ``YYYY-MM-DD`` exclusively (via its ``_to_date_str``
+    helper), so a single format is sufficient; values that don't match
+    return None and are skipped by the caller."""
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return None
 
 
 def _group_mart_rows(rows, out_schema):

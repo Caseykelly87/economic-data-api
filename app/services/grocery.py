@@ -131,7 +131,11 @@ def load_dim_stores_df() -> pd.DataFrame:
     return _load_dim_stores_df_cached(path)
 
 
-def _filter_dates(df: pd.DataFrame, start_date, end_date) -> pd.DataFrame:
+def _filter_dates(
+    df: pd.DataFrame,
+    start_date: date | None,
+    end_date: date | None,
+) -> pd.DataFrame:
     if start_date is not None:
         df = df[df["date"] >= start_date]
     if end_date is not None:
