@@ -26,6 +26,18 @@ from unittest.mock import patch
 import pytest
 
 from app.core.config import settings
+from app.services import grocery as svc
+
+
+@pytest.fixture(autouse=True)
+def _isolate_grocery_caches():
+    """Clear the parquet read caches around every contract test. The
+    offline/online mode-flip test relies on the cache being keyed by
+    resolved path so a path change forces a fresh read; the other tests
+    are insensitive to cache state but get isolation for free."""
+    svc._clear_grocery_caches()
+    yield
+    svc._clear_grocery_caches()
 
 # Values below are read directly off the canonical parquets in app/fixtures/.
 # store 1 on 2024-07-01 is the earliest store-day in store_daily_metrics.

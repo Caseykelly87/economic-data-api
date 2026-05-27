@@ -21,9 +21,16 @@ framework, no shared assertion helpers beyond what `pytest` and the
 `TestClient` provide.
 
 The env-setup block at the top of `tests/conftest.py` runs before
-`app.main` is imported — `Settings()` requires database variables to be
-present at import time. The five `# noqa: E402` comments there mark imports
-deliberately placed after that setup and are load-bearing; leave them.
+`app.main` is imported. After `Settings()` was moved to lazy
+instantiation (resolved on first attribute access via the
+`get_settings()` `lru_cache` plus a module-level `__getattr__` shim),
+the env-setup block is no longer strictly required for import to
+succeed — `Settings()` is now constructed only when an attribute is
+first accessed, not at module import. The five `# noqa: E402` comments
+remain as a defensive barrier against a future change that
+re-introduces import-time work that depends on env vars; treat them as
+documentation that the import order matters, not as a load-bearing
+correctness guard.
 
 Tests are graded into three categories, the shared platform vocabulary:
 
@@ -192,7 +199,7 @@ tests at the start and 130 at the end of that pass. Classification:
 | Uncategorizable      | 0        | 0          |
 | Total                | 126      | 130        |
 
-Current suite size (verified 2026-05-26): 142 tests. Six were added in
+Current suite size (verified 2026-05-27): 160 tests. Six were added in
 the canonical-refresh pass: four parametrized cases pinning each bundled
 fixture's SHA-256 to the upstream ETL canonical (in
 `test_etl_contract.py`, business-correctness — each asserts an
@@ -201,7 +208,16 @@ parametrized cases extending the route-level `rule_id` matrix in
 `test_anomalies.py` to cover `department_coverage` and
 `revenue_zscore_28d`. A follow-on commit pinned the macro DB probe
 warning to carry no traceback (business-correctness, asserts the
-formatted log record), bringing the total to 142. Five earlier
+formatted log record), bringing the total to 142. The
+operational-seams pass added nine `test_request_correlation.py` cases
+covering X-Request-ID header validation (oversized, malformed,
+uppercase, length-cap-overflow shapes), bringing the total to 151;
+the same pass added three `test_config.py` cases pinning the lazy
+Settings lifecycle and the module-level import shim, bringing the
+total to 154; the same pass added six `test_grocery_service.py` cases
+pinning parquet read caching (per-loader cache, cache-clear helper,
+and cache re-keying on resolved-path change), bringing the total to
+160. Five earlier
 additions live in `test_health.py`,
 covering the per-pipeline reporting shape introduced when `/health` was
 split into independent grocery and macro sub-objects; those are

@@ -1,3 +1,4 @@
+import re
 import time
 import uuid
 
@@ -47,14 +48,35 @@ app = FastAPI(
 # Middleware
 # ---------------------------------------------------------------------------
 
+# Canonical UUID format (8-4-4-4-12 lowercase hex). The middleware accepts
+# incoming X-Request-ID headers only when they match this shape and are at
+# most 36 characters; any other value is replaced with a freshly generated
+# UUID. Rejected input is never logged or echoed, since it can be attacker-
+# controlled and propagating it would amplify the response and pressure
+# structlog contextvars on every request.
+_REQUEST_ID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
+_REQUEST_ID_MAX_LEN = 36
+
+
+def _validate_request_id(value: str | None) -> str:
+    """Return a valid request ID — the incoming value if it is a well-formed
+    canonical UUID, a freshly generated UUID otherwise."""
+    if value is not None and len(value) <= _REQUEST_ID_MAX_LEN and _REQUEST_ID_RE.match(value):
+        return value
+    return str(uuid.uuid4())
+
+
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """
     Per-request boundary logging with request correlation IDs.
 
-    On entry: generate a UUID for the request (or accept one from the
-    incoming X-Request-ID header if present) and bind it to structlog
-    contextvars so every log line emitted during the request lifetime
-    automatically includes request_id=<uuid>.
+    On entry: validate the incoming X-Request-ID header against the
+    canonical UUID format; accept it when well-formed, otherwise generate
+    a fresh UUID. Bind the id to structlog contextvars so every log line
+    emitted during the request lifetime automatically includes
+    request_id=<uuid>.
 
     On exit: log method, path, status code, and elapsed time as a
     structured event. Echo the request ID on the response's own
@@ -63,8 +85,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next):
-        incoming = request.headers.get("X-Request-ID")
-        request_id = incoming if incoming else str(uuid.uuid4())
+        request_id = _validate_request_id(request.headers.get("X-Request-ID"))
 
         structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(request_id=request_id)

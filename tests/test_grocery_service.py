@@ -3,6 +3,7 @@
 Use the bundled demo fixtures as input; no live data path is required.
 """
 from datetime import date
+from unittest.mock import patch
 
 import pandas as pd
 import pytest
@@ -13,6 +14,17 @@ from app.schemas.grocery import (
     DashboardSummaryOut,
     StoreMetricOut,
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_grocery_caches():
+    """Clear the parquet read caches before and after each test in this
+    module. Tests that monkeypatch the resolved paths to non-existent
+    directories must not see a stale cached DataFrame, and tests that
+    assert disk read counts must start from a known-cold state."""
+    svc._clear_grocery_caches()
+    yield
+    svc._clear_grocery_caches()
 
 
 METRICS_COLS = {
@@ -314,3 +326,76 @@ def test_dashboard_summary_empty_range_zero_totals():
     assert s.average_labor_cost_pct is None
     assert s.top_stores_by_revenue == []
     assert s.daily_sales_trend == []
+
+
+# ---------------------------------------------------------------------------
+# Parquet read caching
+# ---------------------------------------------------------------------------
+
+def test_load_store_metrics_df_caches_across_calls():
+    """Business-correctness: a second call to load_store_metrics_df with
+    the same resolved path must hit the lru_cache, not re-read the
+    parquet from disk. The assertion is on the underlying pd.read_parquet
+    call count — that the public loader's signature still returns a
+    DataFrame is covered elsewhere."""
+    with patch("app.services.grocery.pd.read_parquet", wraps=pd.read_parquet) as mock_read:
+        svc.load_store_metrics_df()
+        svc.load_store_metrics_df()
+        assert mock_read.call_count == 1
+
+
+def test_load_anomaly_flags_df_caches_across_calls():
+    with patch("app.services.grocery.pd.read_parquet", wraps=pd.read_parquet) as mock_read:
+        svc.load_anomaly_flags_df()
+        svc.load_anomaly_flags_df()
+        assert mock_read.call_count == 1
+
+
+def test_load_department_metrics_df_caches_across_calls():
+    with patch("app.services.grocery.pd.read_parquet", wraps=pd.read_parquet) as mock_read:
+        svc.load_department_metrics_df()
+        svc.load_department_metrics_df()
+        assert mock_read.call_count == 1
+
+
+def test_load_dim_stores_df_caches_across_calls():
+    with patch("app.services.grocery.pd.read_parquet", wraps=pd.read_parquet) as mock_read:
+        svc.load_dim_stores_df()
+        svc.load_dim_stores_df()
+        assert mock_read.call_count == 1
+
+
+def test_clear_grocery_caches_forces_reload():
+    """Business-correctness: after _clear_grocery_caches() the next
+    loader call must re-read from disk. Without this guarantee the
+    offline-vs-online mode-flip tests would silently serve stale cached
+    DataFrames when the resolved path stays the same string."""
+    with patch("app.services.grocery.pd.read_parquet", wraps=pd.read_parquet) as mock_read:
+        svc.load_store_metrics_df()
+        assert mock_read.call_count == 1
+        svc._clear_grocery_caches()
+        svc.load_store_metrics_df()
+        assert mock_read.call_count == 2
+
+
+def test_load_caches_keyed_on_resolved_path(monkeypatch, tmp_path):
+    """Business-correctness: when the resolved path changes (the
+    offline/online mode-flip case), the cache key changes and the next
+    read serves the new file. Without re-keying on the path string, a
+    test that flips STORE_METRICS_PATH would keep getting the prior
+    DataFrame even though the underlying file is different."""
+    # First read against the bundled fixture path.
+    with patch("app.services.grocery.pd.read_parquet", wraps=pd.read_parquet) as mock_read:
+        svc.load_store_metrics_df()
+        assert mock_read.call_count == 1
+
+        # Copy the same parquet to a new path and flip the live setting.
+        # The bytes are identical but the path string differs, so the
+        # cache must serve a fresh read at the new key.
+        src = svc.settings.resolved_store_metrics_path
+        dest = tmp_path / "store_daily_metrics.parquet"
+        dest.write_bytes(__import__("pathlib").Path(src).read_bytes())
+        monkeypatch.setattr(svc.settings, "STORE_METRICS_PATH", str(dest), raising=False)
+
+        svc.load_store_metrics_df()
+        assert mock_read.call_count == 2
