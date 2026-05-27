@@ -83,21 +83,29 @@ class Settings(BaseSettings):
         live_dim_stores = bool(self.DIM_STORES_PATH) and Path(self.DIM_STORES_PATH).is_file()
         return "live" if (live_metrics and live_flags and live_departments and live_dim_stores) else "fixtures"
 
+    def _resolved_paths_exist(self) -> tuple[bool, bool, bool, bool]:
+        """Whether each of (store_metrics, anomaly_flags,
+        department_metrics, dim_stores) resolved paths point at a
+        readable file. Centralized so /health's grocery_data_available
+        check is a single pass over the four resolved paths rather than
+        four scattered ``Path(...).is_file()`` calls. Note that
+        ``grocery_data_source`` checks the configured live paths, not the
+        resolved paths, so it does not share this helper — the semantics
+        intentionally differ."""
+        return (
+            Path(self.resolved_store_metrics_path).is_file(),
+            Path(self.resolved_anomaly_flags_path).is_file(),
+            Path(self.resolved_department_metrics_path).is_file(),
+            Path(self.resolved_dim_stores_path).is_file(),
+        )
+
     @property
     def grocery_data_available(self) -> bool:
         """True when all four grocery parquet files resolve to readable
         files — configured live paths where set, bundled fixtures
         otherwise. The grocery pipeline can serve data whenever this holds.
         Reported by /health."""
-        return all(
-            Path(path).is_file()
-            for path in (
-                self.resolved_store_metrics_path,
-                self.resolved_anomaly_flags_path,
-                self.resolved_department_metrics_path,
-                self.resolved_dim_stores_path,
-            )
-        )
+        return all(self._resolved_paths_exist())
 
     @property
     def canonical_path(self) -> str:
