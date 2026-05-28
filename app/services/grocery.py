@@ -63,12 +63,19 @@ def _load_dim_stores_df_cached(path: str) -> pd.DataFrame:
 
 
 def _clear_grocery_caches() -> None:
-    """Clear the four parquet read caches. For tests that flip the
-    resolved path settings and need the next read to hit disk fresh."""
+    """Clear the four parquet read caches plus the detection-quality
+    JSON cache. For tests that flip the resolved path settings and
+    need the next read to hit disk fresh. The detection-quality cache
+    lives in services.insights but shares the same flip-path-and-read
+    pattern, so it's cleared from one call site rather than two."""
     _load_store_metrics_df_cached.cache_clear()
     _load_anomaly_flags_df_cached.cache_clear()
     _load_department_metrics_df_cached.cache_clear()
     _load_dim_stores_df_cached.cache_clear()
+    # Imported inline to avoid a circular import at module load time -
+    # services.insights only needs this clear hook indirectly via tests.
+    from app.services.insights import _clear_detection_quality_cache
+    _clear_detection_quality_cache()
 
 
 def load_store_metrics_df() -> pd.DataFrame:
