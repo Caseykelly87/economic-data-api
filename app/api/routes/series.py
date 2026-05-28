@@ -13,7 +13,7 @@ router = APIRouter(prefix="/series", tags=["series"])
 @router.get("", response_model=PaginatedSeriesOut)
 def list_series(
     limit: int = Query(default=50, ge=1, le=200, description="Number of series to return (1–200)"),
-    offset: int = Query(default=0, ge=0, description="Number of series to skip"),
+    offset: int = Query(default=0, ge=0, le=100_000, description="Number of series to skip"),
     db: Session = Depends(get_db),
 ):
     """List all available economic series with pagination."""
