@@ -77,6 +77,24 @@ def test_list_series_negative_offset_returns_422(client):
     assert resp.status_code == 422
 
 
+def test_list_series_offset_at_cap_returns_200(client):
+    """Structural: confirms the offset bound accepts the documented
+    maximum (100_000) so the cap is exactly at the boundary, not one
+    below it."""
+    with patch(f"{SVC}.get_all_series", return_value=(0, [])):
+        resp = client.get("/series?offset=100000")
+    assert resp.status_code == 200
+
+
+def test_list_series_offset_over_cap_returns_422(client):
+    """Structural: confirms offsets above the cap are rejected at the
+    validation layer before any DB query runs. Pins the DoS-mitigation
+    bound that keeps a large offset from triggering a Postgres
+    count-and-discard scan in app/services/economic.py."""
+    resp = client.get("/series?offset=100001")
+    assert resp.status_code == 422
+
+
 # ---------------------------------------------------------------------------
 # GET /series/{series_id}
 # ---------------------------------------------------------------------------

@@ -25,7 +25,7 @@ def list_store_metrics(
     limit: int = Query(
         default=50, ge=1, le=200, description="Number of rows to return (1–200)"
     ),
-    offset: int = Query(default=0, ge=0, description="Number of rows to skip"),
+    offset: int = Query(default=0, ge=0, le=100_000, description="Number of rows to skip"),
 ):
     """List store-daily metric rows, filterable by date range and
     store, with pagination."""

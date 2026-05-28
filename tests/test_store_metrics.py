@@ -94,3 +94,21 @@ def test_store_metrics_invalid_date_returns_422(client):
 def test_store_metrics_negative_offset_returns_422(client):
     resp = client.get("/store-metrics?offset=-1")
     assert resp.status_code == 422
+
+
+def test_store_metrics_offset_at_cap_returns_200(client):
+    """Structural: confirms the offset bound accepts the documented
+    maximum (100_000) so the cap is exactly at the boundary, not one
+    below it."""
+    with patch(f"{SVC}.get_store_metrics", return_value=(0, [])):
+        resp = client.get("/store-metrics?offset=100000")
+    assert resp.status_code == 200
+
+
+def test_store_metrics_offset_over_cap_returns_422(client):
+    """Structural: confirms offsets above the cap are rejected at the
+    validation layer. Mirrors the /series guard; here the grocery path
+    is parquet-backed so the risk is iloc-on-large-frame rather than a
+    SQL scan, but the bound is the same for consistency."""
+    resp = client.get("/store-metrics?offset=100001")
+    assert resp.status_code == 422
