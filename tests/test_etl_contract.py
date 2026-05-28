@@ -23,6 +23,7 @@ from pathlib import Path
 from shutil import copyfile
 from unittest.mock import patch
 
+import pandas as pd
 import pytest
 
 from app.core.config import settings
@@ -133,6 +134,42 @@ def test_bundled_fixture_matches_canonical_sha256(filename, expected_sha256):
     assert actual_sha256 == expected_sha256, (
         f"{filename} drifted from ETL canonical. "
         f"Expected {expected_sha256}, got {actual_sha256}."
+    )
+
+
+def test_store_1_2025_revenue_matches_canary():
+    """Pins Store 1's 2025 revenue at the documented canary value.
+
+    Business-correctness: the portal's /about/architecture page claims
+    Store 1 generated $18,598,268 in 2025 (the actual value to the cent
+    is $18,598,267.84). This test pins that claim mechanically so the
+    prose can't drift from the data — a canonical regeneration that
+    moves the value fails CI here, prompting a documentation update
+    (or an investigation into why the value changed).
+
+    The platform-wide 2025 revenue is already CI-enforced via the
+    byte-identity contract on store_daily_metrics.parquet; this test
+    extends that enforcement to a per-store aggregate that the about
+    page calls out specifically.
+
+    The fixture's ``date`` column holds ``datetime.date`` objects, so the
+    2025 filter reads the year off each value rather than slicing a string
+    or using a datetime accessor; ``total_sales`` is the canonical revenue
+    column for the store-day grain.
+    """
+    # Pinned at /about/architecture (portal repo) and the platform README.
+    # Update both if this assertion ever needs to change.
+    fixture_path = Path(settings.GROCERY_FIXTURES_DIR) / "store_daily_metrics.parquet"
+    df = pd.read_parquet(fixture_path)
+    store_1_2025 = df[
+        (df["store_id"] == 1) & (df["date"].map(lambda d: d.year) == 2025)
+    ]
+    actual = round(store_1_2025["total_sales"].sum(), 2)
+    expected = 18_598_267.84
+    assert actual == expected, (
+        f"Store 1 2025 revenue drifted from documented canary. "
+        f"Expected ${expected:,.2f}, got ${actual:,.2f}. "
+        f"Update /about/architecture page or investigate the drift."
     )
 
 
