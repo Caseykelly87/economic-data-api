@@ -69,7 +69,33 @@ EXPECTED_FIXTURE_SHA256 = {
         "39ecd78ca98a23cafe57c7739755b250ae09ff32529459fae5440d61758e2125",
     "anomaly_flags.parquet":
         "f52a8d56b8a0e63fc8d1d0a5aff340795be88f05efa0db168fc204f20e6f8b0a",
+    "detection_quality.json":
+        "60f26c7808ba7e1f737c8f3185c4c0c2585e25c00a359d0c6b686d7c365ee347",
 }
+
+# Extensions Git's autocrlf treats as text and normalizes to LF in the
+# index. The committed bytes for these match what CI sees on Linux
+# checkout; the working-tree bytes on Windows may carry CRLF. Pin the
+# normalized form here so the test is platform-independent.
+TEXT_EXTENSIONS = {".json"}
+
+
+def _sha256_normalized(path: Path) -> str:
+    """SHA-256 of file bytes after LF-normalization for text artifacts.
+
+    Git's autocrlf normalizes text files in the index (LF in storage,
+    CRLF restored on Windows checkout). To match what CI sees, the
+    hash of a text fixture must be computed against its LF form
+    regardless of which platform the test runs on. Binary artifacts
+    (.parquet) bypass autocrlf entirely, so they're hashed raw - the
+    bytes on disk equal the bytes in the index.
+
+    A file is treated as text iff its suffix is in TEXT_EXTENSIONS.
+    """
+    raw = path.read_bytes()
+    if path.suffix in TEXT_EXTENSIONS:
+        raw = raw.replace(b"\r\n", b"\n")
+    return hashlib.sha256(raw).hexdigest()
 
 
 @contextmanager
@@ -86,7 +112,7 @@ def _patched_settings(overrides):
     sorted(EXPECTED_FIXTURE_SHA256.items()),
 )
 def test_bundled_fixture_matches_canonical_sha256(filename, expected_sha256):
-    """Each bundled parquet's SHA-256 matches the ETL canonical reference.
+    """Each bundled fixture's SHA-256 matches the ETL canonical reference.
 
     Business-correctness: the assertion compares a freshly computed SHA-256
     of the bundled file against a hash captured independently at the ETL
@@ -94,11 +120,16 @@ def test_bundled_fixture_matches_canonical_sha256(filename, expected_sha256):
     direction — a stale fixture, a corrupted copy, an inadvertent
     re-encode — fails the test with the offending filename in the
     parametrize ID.
+
+    Text fixtures (.json) are hashed after LF-normalization so the test
+    passes identically on Windows (working tree may carry CRLF) and
+    Linux/CI (LF on checkout); see ``_sha256_normalized``. Binary
+    fixtures (.parquet) are hashed raw - autocrlf doesn't touch them.
     """
     fixtures_dir = Path(settings.GROCERY_FIXTURES_DIR)
     fixture_path = fixtures_dir / filename
     assert fixture_path.is_file(), f"Fixture missing: {fixture_path}"
-    actual_sha256 = hashlib.sha256(fixture_path.read_bytes()).hexdigest()
+    actual_sha256 = _sha256_normalized(fixture_path)
     assert actual_sha256 == expected_sha256, (
         f"{filename} drifted from ETL canonical. "
         f"Expected {expected_sha256}, got {actual_sha256}."

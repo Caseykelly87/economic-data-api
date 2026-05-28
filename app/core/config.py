@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     ANOMALY_FLAGS_PATH: str | None = None
     DEPARTMENT_METRICS_PATH: str | None = None
     DIM_STORES_PATH: str | None = None
+    DETECTION_QUALITY_PATH: str | None = None
     GROCERY_FIXTURES_DIR: str = "app/fixtures"
 
     @property
@@ -72,6 +73,15 @@ class Settings(BaseSettings):
         if self.DIM_STORES_PATH and Path(self.DIM_STORES_PATH).is_file():
             return self.DIM_STORES_PATH
         return f"{self.GROCERY_FIXTURES_DIR}/dim_stores.parquet"
+
+    @property
+    def resolved_detection_quality_path(self) -> str:
+        """Live DETECTION_QUALITY_PATH if it points at a readable file,
+        else the bundled fixture. The artifact is a JSON document
+        produced by the ETL's evaluate_detection.py and read as-is."""
+        if self.DETECTION_QUALITY_PATH and Path(self.DETECTION_QUALITY_PATH).is_file():
+            return self.DETECTION_QUALITY_PATH
+        return f"{self.GROCERY_FIXTURES_DIR}/detection_quality.json"
 
     @property
     def grocery_data_source(self) -> str:
