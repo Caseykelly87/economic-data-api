@@ -69,6 +69,8 @@ EXPECTED_FIXTURE_SHA256 = {
         "39ecd78ca98a23cafe57c7739755b250ae09ff32529459fae5440d61758e2125",
     "anomaly_flags.parquet":
         "f52a8d56b8a0e63fc8d1d0a5aff340795be88f05efa0db168fc204f20e6f8b0a",
+    "detection_quality.json":
+        "2c3841148cd5e45f33b1760f3c14a945d3cd6fa025050c826e740c8e4d591bc2",
 }
 
 
