@@ -58,6 +58,7 @@ cp .env.example .env
 | `ANOMALY_FLAGS_PATH` | No | — | Path to live `anomaly_flags.parquet` from the upstream ETL. Falls back to bundled fixture if unset or unreadable. |
 | `DEPARTMENT_METRICS_PATH` | No | — | Path to live `department_daily_metrics.parquet` from the upstream ETL. Falls back to bundled fixture if unset or unreadable. |
 | `DIM_STORES_PATH` | No | — | Path to live `dim_stores.parquet` from the upstream ETL. Falls back to bundled fixture if unset or unreadable. |
+| `DETECTION_QUALITY_PATH` | No | — | Path to live `detection_quality.json` from the upstream ETL. Falls back to bundled fixture if unset or unreadable. Consumed by `/insights/detection-quality`. |
 | `GROCERY_FIXTURES_DIR` | No | `app/fixtures` | Directory where bundled fixtures live. Used as the fallback source. |
 
 The four `*_PATH` env vars are independent — each path resolves to live or fixture per request via a property on the settings object. Mode detection (live vs fixture) reported by `/health` is `live` only when **all four** paths point at readable files; otherwise `fixtures`.
@@ -383,6 +384,33 @@ Pre-aggregated snapshot of all key indicators from `public_analytics.mart_econom
       "latest_value": 37.32
     }
   ]
+}
+```
+
+#### `GET /insights/detection-quality`
+
+Detection-quality measurement against the sim engine's ground-truth `anomaly_log.csv`. Reads the upstream ETL's `detection_quality.json` artifact (bundled in `app/fixtures/`, overridable via `DETECTION_QUALITY_PATH`), passes through global recall, false-positive rate, per-anomaly-type recall, and the count fields verbatim, then adds a computed `contract` block with the phase 2 verdict (`recall ≥ 0.35` AND `fpr ≤ 0.10`) so the portal can render pass/fail without re-knowing the thresholds.
+
+**Response** `200`
+
+```json
+{
+  "global": {"injected_pairs": 135, "matched_pairs": 65, "recall": 0.481},
+  "by_anomaly_type": {
+    "missing_department": {"injected": 39, "matched": 39, "recall": 1.0}
+  },
+  "false_positive_rate": 0.188,
+  "false_positives": 529,
+  "negative_universe": 2809,
+  "flag_rate": 0.304,
+  "total_flags": 894,
+  "total_metric_rows": 2944,
+  "contract": {
+    "global_recall_threshold": 0.35,
+    "fpr_threshold": 0.10,
+    "passes": false,
+    "reasons": ["false_positive_rate 0.188 above threshold 0.1"]
+  }
 }
 ```
 
