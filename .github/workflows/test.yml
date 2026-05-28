@@ -35,4 +35,4 @@ jobs:
         run: ruff check app scripts tests
 
       - name: Run pytest
-        run: python -m pytest -q
+        run: python -m pytest -q --cov=app --cov-report=term-missing --cov-fail-under=90
