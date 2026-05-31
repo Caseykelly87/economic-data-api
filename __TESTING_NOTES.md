@@ -72,7 +72,7 @@ The load-bearing read/serve logic and the tests that hold it.
 - **Parquet reading** — `test_grocery_service.py`. `load_store_metrics_df`
   and `load_anomaly_flags_df` read the resolved parquet and return a
   DataFrame with the canonical schema, the canonical row count (2944 store
-  metrics, 894 anomaly flags), and `datetime.date` objects in the `date`
+  metrics, 178 anomaly flags), and `datetime.date` objects in the `date`
   column. The missing-path branch raises `FileNotFoundError`
   (`test_load_*_raises_when_path_missing`).
 - **Schema enforcement** — `test_etl_contract.py::

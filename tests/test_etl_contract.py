@@ -57,10 +57,11 @@ CANONICAL_FILES = {
 }
 
 # SHA-256 of each bundled fixture, copied verbatim from the upstream ETL's
-# data/processed/canonical/ output after the revenue_zscore_28d rule merge
-# (economic-data-etl PR #25, merged 2026-05). These are the authoritative
-# hashes for the contract — independently computed at the ETL boundary,
-# pinned here so the test catches drift instead of co-computing both sides.
+# data/processed/canonical/ output after the margin and reconciliation
+# rules merge (economic-data-etl PR #33, merged 2026-05). These are the
+# authoritative hashes for the contract — independently computed at the
+# ETL boundary, pinned here so the test catches drift instead of
+# co-computing both sides.
 EXPECTED_FIXTURE_SHA256 = {
     "store_daily_metrics.parquet":
         "2ba24c7423ee7da2bccab3ba87765c77653c34955c565c9c66e1e49fa56b13a5",
@@ -69,9 +70,9 @@ EXPECTED_FIXTURE_SHA256 = {
     "dim_stores.parquet":
         "39ecd78ca98a23cafe57c7739755b250ae09ff32529459fae5440d61758e2125",
     "anomaly_flags.parquet":
-        "f52a8d56b8a0e63fc8d1d0a5aff340795be88f05efa0db168fc204f20e6f8b0a",
+        "11f0ca0581a12cb7f3cfc53fe712cff498b8a1fceb1c69cc13c147469e6341b1",
     "detection_quality.json":
-        "60f26c7808ba7e1f737c8f3185c4c0c2585e25c00a359d0c6b686d7c365ee347",
+        "1bba2d2cdc45501f250eeb8b3f3abe88184b8225d21b4ba466ca2892e418c04f",
 }
 
 # Extensions Git's autocrlf treats as text and normalizes to LF in the
