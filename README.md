@@ -395,21 +395,21 @@ Detection-quality measurement against the sim engine's ground-truth `anomaly_log
 
 ```json
 {
-  "global": {"injected_pairs": 135, "matched_pairs": 65, "recall": 0.481},
+  "global": {"injected_pairs": 135, "matched_pairs": 135, "recall": 1.0},
   "by_anomaly_type": {
     "missing_department": {"injected": 39, "matched": 39, "recall": 1.0}
   },
-  "false_positive_rate": 0.188,
-  "false_positives": 529,
+  "false_positive_rate": 0.009,
+  "false_positives": 26,
   "negative_universe": 2809,
-  "flag_rate": 0.304,
-  "total_flags": 894,
+  "flag_rate": 0.060,
+  "total_flags": 178,
   "total_metric_rows": 2944,
   "contract": {
     "global_recall_threshold": 0.35,
     "fpr_threshold": 0.10,
-    "passes": false,
-    "reasons": ["false_positive_rate 0.188 above threshold 0.1"]
+    "passes": true,
+    "reasons": []
   }
 }
 ```
@@ -531,7 +531,7 @@ Current canonical contents:
 |---|---:|---|
 | `store_daily_metrics.parquet` | 2,944 × 6 | 8 stores × 184 days × 2 years (2024 + 2025) |
 | `department_daily_metrics.parquet` | 29,414 × 7 | Same window across 10 departments per store-day |
-| `anomaly_flags.parquet` | 894 × 9 | 815 info, 78 warning, 1 critical |
+| `anomaly_flags.parquet` | 178 × 9 | 27 info, 150 warning, 1 critical |
 | `dim_stores.parquet` | 8 × 10 | One row per store |
 
 The canonical covers a paired-year window: 184 days × 2 years (2024-07-01 through 2024-12-31 and 2025-07-01 through 2025-12-31). Filtering `store_daily_metrics.parquet` to the 2025 window alone yields 1,472 rows. The 2024 window enables year-over-year comparison views in the portal's store drilldown via the existing `start_date` / `end_date` filters; no new endpoints were needed.

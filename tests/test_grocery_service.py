@@ -64,18 +64,19 @@ def test_load_anomaly_flags_df_returns_dataframe():
     assert isinstance(df, pd.DataFrame)
     assert set(df.columns) == FLAG_COLS
     # The bundled fixture is the ETL canonical anomaly_flags parquet.
-    assert len(df) == 894
+    assert len(df) == 178
     assert isinstance(df["date"].iloc[0], date)
-    # A known flag read off the canonical parquet: store 7's revenue_band
-    # exception on 2024-07-05.
+    # A known flag read off the canonical parquet: store 1's
+    # gross_margin_band exception on 2024-07-14, where the gross margin
+    # ratio reads 0.95 against an expected band ceiling of 0.62.
     flag = df[
-        (df["store_id"] == 7)
-        & (df["date"] == date(2024, 7, 5))
-        & (df["rule_id"] == "revenue_band")
+        (df["store_id"] == 1)
+        & (df["date"] == date(2024, 7, 14))
+        & (df["rule_id"] == "gross_margin_band")
     ]
     assert len(flag) == 1
-    assert flag.iloc[0]["actual_value"] == 70154.26
-    assert flag.iloc[0]["severity_level"] == "info"
+    assert flag.iloc[0]["actual_value"] == 0.95
+    assert flag.iloc[0]["severity_level"] == "warning"
 
 
 def test_load_store_metrics_raises_when_path_missing(monkeypatch):
@@ -181,16 +182,17 @@ def test_get_anomalies_returns_total_and_items():
     total, items = svc.get_anomalies(limit=200, offset=0)
     assert isinstance(total, int)
     # Full canonical anomaly_flags row count.
-    assert total == 894
-    assert len(items) == 200
+    assert total == 178
+    assert len(items) == 178
     assert all(isinstance(item, AnomalyFlagOut) for item in items)
     # The service sorts by (date, store_id, rule_id); the first flag is
-    # store 7's revenue_band exception on the earliest flagged date.
+    # store 8's department_reconciliation exception on the earliest
+    # flagged date.
     first = items[0]
-    assert first.date == date(2024, 7, 5)
-    assert first.store_id == 7
-    assert first.rule_id == "revenue_band"
-    assert first.actual_value == 70154.26
+    assert first.date == date(2024, 7, 2)
+    assert first.store_id == 8
+    assert first.rule_id == "department_reconciliation"
+    assert first.actual_value == 50930.50
 
 
 def test_get_anomalies_severity_filter():
@@ -236,12 +238,12 @@ def test_get_anomalies_pagination_honored():
     # Rows sort by (date, store_id, rule_id); offset=2 advances exactly two
     # rows into that ordering.
     assert [(f.date, f.store_id, f.rule_id) for f in page_a] == [
-        (date(2024, 7, 5), 7, "revenue_band"),
-        (date(2024, 7, 5), 7, "transactions_band"),
+        (date(2024, 7, 2), 8, "department_reconciliation"),
+        (date(2024, 7, 4), 1, "department_reconciliation"),
     ]
     assert [(f.date, f.store_id, f.rule_id) for f in page_b] == [
-        (date(2024, 7, 5), 8, "revenue_band"),
-        (date(2024, 7, 5), 8, "transactions_band"),
+        (date(2024, 7, 8), 7, "department_reconciliation"),
+        (date(2024, 7, 10), 1, "department_reconciliation"),
     ]
 
 
