@@ -182,7 +182,7 @@ The `/metrics` endpoint is unauthenticated. Production deployments should restri
 ## Testing
 
 ```bash
-pytest                  # all 160 tests
+pytest                  # all 179 tests
 pytest -v               # verbose
 pytest tests/test_metrics.py   # single file
 pytest --cov=app        # with coverage
@@ -190,25 +190,27 @@ pytest --cov=app        # with coverage
 
 The test suite makes no live database connections and no network calls. Service-layer functions are patched via `unittest.mock.patch` so endpoint tests assert on response shapes without touching parquet files or the database. Service-layer tests use synthetic DataFrames built in-memory.
 
-The 15 test files:
+The 17 test files:
 
 | File | Tests | Coverage |
 |---|---:|---|
 | `test_config.py` | 3 | Lazy Settings lifecycle and import shim |
-| `test_health.py` | 15 | `/health` endpoint, component-level pipeline status |
-| `test_series.py` | 13 | `/series` and `/series/{series_id}` |
+| `test_health.py` | 16 | `/health` endpoint, component-level pipeline status |
+| `test_series.py` | 15 | `/series` and `/series/{series_id}` |
 | `test_metrics.py` | 13 | `/metrics/inflation`, `/metrics/unemployment`, `/metrics/gdp` |
-| `test_insights.py` | 4 | `/insights/summary` |
+| `test_insights.py` | 11 | `/insights/summary` and `/insights/detection-quality` |
 | `test_grocery_service.py` | 30 | Service layer — parquet IO, filtering, pagination, read caching |
-| `test_store_metrics.py` | 10 | `/store-metrics` endpoint and pagination envelope |
+| `test_store_metrics.py` | 12 | `/store-metrics` endpoint and pagination envelope |
 | `test_anomalies.py` | 19 | `/anomalies` endpoint, all filter parameters |
 | `test_dashboard.py` | 9 | `/dashboard-summary` envelope and aggregation |
 | `test_department_metrics.py` | 9 | `/department-metrics` endpoint and filters |
 | `test_dim_stores.py` | 7 | `/dim-stores` endpoint, ZIP/FIPS string coercion |
-| `test_etl_contract.py` | 8 | Byte-identical fixture contract: SHA-256 pinning and ETL canonical parquet → API served values |
+| `test_etl_contract.py` | 10 | Byte-identical fixture contract: SHA-256 pinning and ETL canonical parquet → API served values |
 | `test_observability.py` | 4 | structlog configurator, ExtraAdder bridge |
 | `test_prometheus_metrics.py` | 3 | `/metrics` endpoint, custom counter wiring |
 | `test_request_correlation.py` | 12 | X-Request-ID middleware, contextvars binding, header validation |
+| `test_performance.py` | 3 | Concurrent-throughput, largest-payload, and cache-effectiveness guards on the read path |
+| `test_resilience.py` | 3 | Fault injection: mid-request loader failure, concurrent cached-frame access, boundary pagination under load |
 
 The Pydantic schemas are themselves a form of test: any service function that returns data not matching its declared schema fails serialization, surfacing the contract violation immediately.
 
