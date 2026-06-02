@@ -211,6 +211,7 @@ The 18 test files:
 | `test_request_correlation.py` | 12 | X-Request-ID middleware, contextvars binding, header validation |
 | `test_performance.py` | 3 | Concurrent-throughput, largest-payload, and cache-effectiveness guards on the read path |
 | `test_resilience.py` | 3 | Fault injection: mid-request loader failure, concurrent cached-frame access, boundary pagination under load |
+| `test_docs_count.py` | 1 | Doc-drift guard: pins the README test-count headline to the live collected count |
 
 The Pydantic schemas are themselves a form of test: any service function that returns data not matching its declared schema fails serialization, surfacing the contract violation immediately.
 
