@@ -199,7 +199,7 @@ tests at the start and 130 at the end of that pass. Classification:
 | Uncategorizable      | 0        | 0          |
 | Total                | 126      | 130        |
 
-Current suite size (verified 2026-05-27): 160 tests. Six were added in
+Suite size after that pass (verified 2026-05-27): 160 tests. Six were added in
 the canonical-refresh pass: four parametrized cases pinning each bundled
 fixture's SHA-256 to the upstream ETL canonical (in
 `test_etl_contract.py`, business-correctness — each asserts an
@@ -224,6 +224,16 @@ split into independent grocery and macro sub-objects; those are
 structural — the endpoint's status and reason fields are not derived
 quantities. The split above remains directionally accurate; see
 `README.md` for the current per-file breakdown.
+
+Since that pass, detection-quality and chart-fix work brought the
+measured suite to 173 without updating this note; the per-file table in
+`README.md` is the verified source for the current breakdown. The
+performance-and-fault-injection pass adds six more — three in
+`test_performance.py` (concurrent throughput, largest-payload retrieval,
+cache-effectiveness) and three in `test_resilience.py` (mid-request
+loader failure returning a clean 500, concurrent access to the cached
+frames, boundary pagination under load) — for a verified total of 179
+tests as of 2026-06-02.
 
 The suite is structural-heavy by construction: most route test modules mock
 the service layer, so they can only assert dispatch wiring and response
