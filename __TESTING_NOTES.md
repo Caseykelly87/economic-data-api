@@ -233,7 +233,9 @@ performance-and-fault-injection pass adds six more — three in
 cache-effectiveness) and three in `test_resilience.py` (mid-request
 loader failure returning a clean 500, concurrent access to the cached
 frames, boundary pagination under load) — for a verified total of 179
-tests as of 2026-06-02.
+tests as of 2026-06-02. A documentation drift-guard pass then added one
+more — `test_docs_count.py`, which pins the README test-count headline to
+the live collected count — bringing the verified total to 180.
 
 The suite is structural-heavy by construction: most route test modules mock
 the service layer, so they can only assert dispatch wiring and response
