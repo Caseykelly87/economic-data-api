@@ -182,7 +182,7 @@ The `/metrics` endpoint is unauthenticated. Production deployments should restri
 ## Testing
 
 ```bash
-pytest                  # all 180 tests
+pytest                  # all 182 tests
 pytest -v               # verbose
 pytest tests/test_metrics.py   # single file
 pytest --cov=app        # with coverage
@@ -201,7 +201,7 @@ The 18 test files:
 | `test_insights.py` | 11 | `/insights/summary` and `/insights/detection-quality` |
 | `test_grocery_service.py` | 30 | Service layer — parquet IO, filtering, pagination, read caching |
 | `test_store_metrics.py` | 12 | `/store-metrics` endpoint and pagination envelope |
-| `test_anomalies.py` | 19 | `/anomalies` endpoint, all filter parameters |
+| `test_anomalies.py` | 21 | `/anomalies` endpoint, all filter parameters |
 | `test_dashboard.py` | 9 | `/dashboard-summary` envelope and aggregation |
 | `test_department_metrics.py` | 9 | `/department-metrics` endpoint and filters |
 | `test_dim_stores.py` | 7 | `/dim-stores` endpoint, ZIP/FIPS string coercion |
@@ -429,7 +429,7 @@ Paginated store-day metric rows. Filterable by `start_date`, `end_date`, `store_
 
 #### `GET /anomalies`
 
-Paginated detection flags. Filterable by `start_date`, `end_date`, `store_id`, `severity_level` (`info` / `warning` / `critical`), and `rule_id` (`revenue_band` / `labor_pct_band` / `avg_ticket_band` / `transactions_band` / `yoy_comp` / `department_coverage` / `revenue_zscore_28d`). Standard envelope.
+Paginated detection flags. Filterable by `start_date`, `end_date`, `store_id`, `severity_level` (`info` / `warning` / `critical`), and `rule_id` (`revenue_band` / `labor_pct_band` / `avg_ticket_band` / `transactions_band` / `yoy_comp` / `revenue_zscore_28d` / `department_coverage` / `gross_margin_band` / `department_reconciliation`). Standard envelope.
 
 #### `GET /dashboard-summary`
 

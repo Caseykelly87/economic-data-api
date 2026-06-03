@@ -16,8 +16,10 @@ RuleLiteral = Literal[
     "avg_ticket_band",
     "transactions_band",
     "yoy_comp",
-    "department_coverage",
     "revenue_zscore_28d",
+    "department_coverage",
+    "gross_margin_band",
+    "department_reconciliation",
 ]
 
 router = APIRouter(prefix="/anomalies", tags=["anomalies"])
@@ -42,7 +44,8 @@ def list_anomalies(
         default=None,
         description="Filter to a detection rule: revenue_band, "
                     "labor_pct_band, avg_ticket_band, transactions_band, "
-                    "yoy_comp, department_coverage, or revenue_zscore_28d",
+                    "yoy_comp, revenue_zscore_28d, department_coverage, "
+                    "gross_margin_band, or department_reconciliation",
     ),
     limit: int = Query(
         default=50, ge=1, le=200, description="Number of rows to return (1–200)"
