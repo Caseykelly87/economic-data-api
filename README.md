@@ -182,7 +182,7 @@ The `/metrics` endpoint is unauthenticated. Production deployments should restri
 ## Testing
 
 ```bash
-pytest                  # all 182 tests
+pytest                  # all 185 tests
 pytest -v               # verbose
 pytest tests/test_metrics.py   # single file
 pytest --cov=app        # with coverage
@@ -673,7 +673,7 @@ Builds the image, brings the compose stack up, polls `/health`, exercises the ma
 
 ### Environment variables
 
-The five `DB_*` variables are required for the container to start (the Settings model in `app/core/config.py` has no defaults for them and the SQLAlchemy engine is created at import time). The rest are optional with the defaults shown.
+The five `DB_*` variables are required for the container to start (the Settings model in `app/core/config.py` has no defaults for them, so constructing settings fails without them). The rest are optional with the defaults shown.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
