@@ -22,9 +22,9 @@ fixtures:
 
 | Source                     | Rows   | Grain                                  |
 |----------------------------|--------|----------------------------------------|
-| `store_daily_metrics`      | 2,944  | 8 stores, 368 store-days each (2024-07 to 2025-12) |
-| `department_daily_metrics` | 29,414 | store × department × day               |
-| `anomaly_flags`            | 178    | one row per flagged store-day-rule     |
+| `store_daily_metrics`      | 5,848  | 8 stores, 731 store-days each (2024-01 to 2025-12) |
+| `department_daily_metrics` | 58,424 | store × department × day               |
+| `anomaly_flags`            | 343    | one row per flagged store-day-rule     |
 | `dim_stores`               | 8      | one row per store                      |
 
 The macro side reads economic time series from Postgres; those fact tables
@@ -60,7 +60,7 @@ count.
 DataFrame and does its filtering, grouping, and aggregation in pandas.
 
 **Why it is right at this scale.** Thousands to tens of thousands of rows is
-squarely in pandas' comfort zone. The largest frame is the 29,414-row
+squarely in pandas' comfort zone. The largest frame is the 58,424-row
 department table; it loads and filters in milliseconds and the whole working
 set fits in memory with room to spare. A query engine or a distributed
 framework would add operational surface and a dependency footprint to solve

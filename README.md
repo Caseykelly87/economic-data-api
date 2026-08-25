@@ -182,7 +182,7 @@ The `/metrics` endpoint is unauthenticated. Production deployments should restri
 ## Testing
 
 ```bash
-pytest                  # all 185 tests
+pytest                  # full suite
 pytest -v               # verbose
 pytest tests/test_metrics.py   # single file
 pytest --cov=app        # with coverage
@@ -190,28 +190,27 @@ pytest --cov=app        # with coverage
 
 The test suite makes no live database connections and no network calls. Service-layer functions are patched via `unittest.mock.patch` so endpoint tests assert on response shapes without touching parquet files or the database. Service-layer tests use synthetic DataFrames built in-memory.
 
-The 18 test files:
+The test files:
 
-| File | Tests | Coverage |
-|---|---:|---|
-| `test_config.py` | 3 | Lazy Settings lifecycle and import shim |
-| `test_health.py` | 16 | `/health` endpoint, component-level pipeline status |
-| `test_series.py` | 15 | `/series` and `/series/{series_id}` |
-| `test_metrics.py` | 13 | `/metrics/inflation`, `/metrics/unemployment`, `/metrics/gdp` |
-| `test_insights.py` | 11 | `/insights/summary` and `/insights/detection-quality` |
-| `test_grocery_service.py` | 30 | Service layer — parquet IO, filtering, pagination, read caching |
-| `test_store_metrics.py` | 12 | `/store-metrics` endpoint and pagination envelope |
-| `test_anomalies.py` | 21 | `/anomalies` endpoint, all filter parameters |
-| `test_dashboard.py` | 9 | `/dashboard-summary` envelope and aggregation |
-| `test_department_metrics.py` | 9 | `/department-metrics` endpoint and filters |
-| `test_dim_stores.py` | 7 | `/dim-stores` endpoint, ZIP/FIPS string coercion |
-| `test_etl_contract.py` | 10 | Byte-identical fixture contract: SHA-256 pinning and ETL canonical parquet → API served values |
-| `test_observability.py` | 4 | structlog configurator, ExtraAdder bridge |
-| `test_prometheus_metrics.py` | 3 | `/metrics` endpoint, custom counter wiring |
-| `test_request_correlation.py` | 12 | X-Request-ID middleware, contextvars binding, header validation |
-| `test_performance.py` | 3 | Concurrent-throughput, largest-payload, and cache-effectiveness guards on the read path |
-| `test_resilience.py` | 3 | Fault injection: mid-request loader failure, concurrent cached-frame access, boundary pagination under load |
-| `test_docs_count.py` | 1 | Doc-drift guard: pins the README test-count headline to the live collected count |
+| File | Coverage |
+|---|---|
+| `test_config.py` | Lazy Settings lifecycle and import shim |
+| `test_health.py` | `/health` endpoint, component-level pipeline status |
+| `test_series.py` | `/series` and `/series/{series_id}` |
+| `test_metrics.py` | `/metrics/inflation`, `/metrics/unemployment`, `/metrics/gdp` |
+| `test_insights.py` | `/insights/summary` and `/insights/detection-quality` |
+| `test_grocery_service.py` | Service layer — parquet IO, filtering, pagination, read caching |
+| `test_store_metrics.py` | `/store-metrics` endpoint and pagination envelope |
+| `test_anomalies.py` | `/anomalies` endpoint, all filter parameters |
+| `test_dashboard.py` | `/dashboard-summary` envelope and aggregation |
+| `test_department_metrics.py` | `/department-metrics` endpoint and filters |
+| `test_dim_stores.py` | `/dim-stores` endpoint, ZIP/FIPS string coercion |
+| `test_etl_contract.py` | Byte-identical fixture contract: SHA-256 pinning and ETL canonical parquet → API served values |
+| `test_observability.py` | structlog configurator, ExtraAdder bridge |
+| `test_prometheus_metrics.py` | `/metrics` endpoint, custom counter wiring |
+| `test_request_correlation.py` | X-Request-ID middleware, contextvars binding, header validation |
+| `test_performance.py` | Concurrent-throughput, largest-payload, and cache-effectiveness guards on the read path |
+| `test_resilience.py` | Fault injection: mid-request loader failure, concurrent cached-frame access, boundary pagination under load |
 
 The Pydantic schemas are themselves a form of test: any service function that returns data not matching its declared schema fails serialization, surfacing the contract violation immediately.
 
@@ -398,16 +397,16 @@ Detection-quality measurement against the sim engine's ground-truth `anomaly_log
 
 ```json
 {
-  "global": {"injected_pairs": 135, "matched_pairs": 135, "recall": 1.0},
+  "global": {"injected_pairs": 272, "matched_pairs": 272, "recall": 1.0},
   "by_anomaly_type": {
-    "missing_department": {"injected": 39, "matched": 39, "recall": 1.0}
+    "missing_department": {"injected": 83, "matched": 83, "recall": 1.0}
   },
-  "false_positive_rate": 0.009,
-  "false_positives": 26,
-  "negative_universe": 2809,
-  "flag_rate": 0.060,
-  "total_flags": 178,
-  "total_metric_rows": 2944,
+  "false_positive_rate": 0.006,
+  "false_positives": 35,
+  "negative_universe": 5576,
+  "flag_rate": 0.059,
+  "total_flags": 343,
+  "total_metric_rows": 5848,
   "contract": {
     "global_recall_threshold": 0.35,
     "fpr_threshold": 0.10,
@@ -526,18 +525,18 @@ The four paths resolve independently per request via `Settings.resolved_*_path` 
 
 #### Refreshing bundled demo fixtures
 
-The fixtures in `app/fixtures/` (`store_daily_metrics.parquet`, `anomaly_flags.parquet`, `department_daily_metrics.parquet`, `dim_stores.parquet`) are byte-identical copies of the canonical pipeline output committed at `data/processed/canonical/` in the upstream `economic-data-etl` repository. They are produced by running the actual sim engine and ETL pipeline end-to-end against the canonical paired-year window — they are not separately generated synthetic data.
+The fixtures in `app/fixtures/` (`store_daily_metrics.parquet`, `anomaly_flags.parquet`, `department_daily_metrics.parquet`, `dim_stores.parquet`) are byte-identical copies of the canonical pipeline output committed at `data/processed/canonical/` in the upstream `economic-data-etl` repository. They are produced by running the actual sim engine and ETL pipeline end-to-end against the canonical two-year window — they are not separately generated synthetic data.
 
 Current canonical contents:
 
 | File | Rows × Cols | Notes |
 |---|---:|---|
-| `store_daily_metrics.parquet` | 2,944 × 6 | 8 stores × 184 days × 2 years (2024 + 2025) |
-| `department_daily_metrics.parquet` | 29,414 × 7 | Same window across 10 departments per store-day |
-| `anomaly_flags.parquet` | 178 × 9 | 27 info, 150 warning, 1 critical |
+| `store_daily_metrics.parquet` | 5,848 × 6 | 8 stores × 731 days (two full calendar years) |
+| `department_daily_metrics.parquet` | 58,424 × 7 | Same window across 10 departments per store-day |
+| `anomaly_flags.parquet` | 343 × 9 | One row per fired detection rule per store-day |
 | `dim_stores.parquet` | 8 × 10 | One row per store |
 
-The canonical covers a paired-year window: 184 days × 2 years (2024-07-01 through 2024-12-31 and 2025-07-01 through 2025-12-31). Filtering `store_daily_metrics.parquet` to the 2025 window alone yields 1,472 rows. The 2024 window enables year-over-year comparison views in the portal's store drilldown via the existing `start_date` / `end_date` filters; no new endpoints were needed.
+The canonical covers the two full calendar years 2024-01-01 through 2025-12-31 (731 days; 2024 is a leap year). Filtering `store_daily_metrics.parquet` to 2025 alone yields 2,920 rows. The full 2024 year enables year-over-year comparison views in the portal's store drilldown via the existing `start_date` / `end_date` filters; no new endpoints were needed.
 
 To refresh: regenerate the canonical parquets in the upstream ETL repo (`scripts/build_canonical_fixtures.py` there), then copy the resulting files into this repo's `app/fixtures/` and commit. The upstream pipeline is byte-deterministic, so successive regenerations against the same window produce identical bytes.
 

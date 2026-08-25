@@ -11,7 +11,6 @@ from unittest.mock import patch
 
 from app.core.config import settings
 
-
 # --- overall status and HTTP code ----------------------------------------
 
 def test_health_returns_200_when_both_pipelines_up(client):

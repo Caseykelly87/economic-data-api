@@ -89,9 +89,12 @@ class Settings(BaseSettings):
         Reported by /health and logged at startup."""
         live_metrics = bool(self.STORE_METRICS_PATH) and Path(self.STORE_METRICS_PATH).is_file()
         live_flags = bool(self.ANOMALY_FLAGS_PATH) and Path(self.ANOMALY_FLAGS_PATH).is_file()
-        live_departments = bool(self.DEPARTMENT_METRICS_PATH) and Path(self.DEPARTMENT_METRICS_PATH).is_file()
+        live_departments = bool(self.DEPARTMENT_METRICS_PATH) and Path(
+            self.DEPARTMENT_METRICS_PATH
+        ).is_file()
         live_dim_stores = bool(self.DIM_STORES_PATH) and Path(self.DIM_STORES_PATH).is_file()
-        return "live" if (live_metrics and live_flags and live_departments and live_dim_stores) else "fixtures"
+        all_live = live_metrics and live_flags and live_departments and live_dim_stores
+        return "live" if all_live else "fixtures"
 
     def _resolved_paths_exist(self) -> tuple[bool, bool, bool, bool]:
         """Whether each of (store_metrics, anomaly_flags,

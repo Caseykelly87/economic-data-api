@@ -171,7 +171,9 @@ def get_unemployment_series(
     end_date: date | None = None,
     series_id: str | None = None,
 ) -> list[UnemploymentOut]:
-    q = select(MartLaborMarket).order_by(MartLaborMarket.series_id, MartLaborMarket.observation_date)
+    q = select(MartLaborMarket).order_by(
+        MartLaborMarket.series_id, MartLaborMarket.observation_date
+    )
     q = _apply_mart_filters(q, MartLaborMarket, series_id, start_date, end_date)
     rows = db.execute(q).scalars().all()
     return _group_mart_rows(rows, UnemploymentOut)

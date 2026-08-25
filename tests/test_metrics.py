@@ -10,7 +10,9 @@ from app.schemas.economic import GdpOut, InflationOut, ObservationOut, Unemploym
 
 SVC = "app.services.economic"
 
-REQUIRED_METRIC_FIELDS = ("series_id", "series_name", "source", "latest_date", "latest_value", "observations")
+REQUIRED_METRIC_FIELDS = (
+    "series_id", "series_name", "source", "latest_date", "latest_value", "observations"
+)
 
 
 def _obs() -> ObservationOut:

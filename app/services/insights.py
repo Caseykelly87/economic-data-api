@@ -23,7 +23,6 @@ from app.schemas.insights import (
     GlobalMetricsOut,
 )
 
-
 # Phase 2 detection contract. Matches CONTRACT_GLOBAL_RECALL and
 # CONTRACT_FPR in the ETL's scripts/evaluate_detection.py - the same
 # thresholds that script renders verbally in its stdout. Pinned here so

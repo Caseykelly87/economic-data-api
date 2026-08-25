@@ -17,10 +17,10 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 # store_daily_metrics canaries: full row count and the per-store count
-# used to check that concurrent filtered reads stay correct. 2944 rows /
-# 8 stores = 368 store-days each.
-STORE_METRICS_TOTAL = 2944
-PER_STORE_ROWS = 368
+# used to check that concurrent filtered reads stay correct. 5848 rows /
+# 8 stores = 731 store-days each.
+STORE_METRICS_TOTAL = 5848
+PER_STORE_ROWS = 731
 OFFSET_CAP = 100_000
 PAGE_SIZE_CAP = 200
 
@@ -66,8 +66,8 @@ def test_concurrent_filtered_reads_stay_correct(client):
     for store_id, resp in results:
         assert resp.status_code == 200
         body = resp.json()
-        # Each store has the full 368-day history; the filtered total must
-        # be exactly that, never the unfiltered 2944 (which would mean the
+        # Each store has the full 731-day history; the filtered total must
+        # be exactly that, never the unfiltered 5848 (which would mean the
         # filter was lost to a shared-frame race).
         assert body["total"] == PER_STORE_ROWS
         assert all(item["store_id"] == store_id for item in body["items"])

@@ -25,7 +25,7 @@ from app.services import grocery as svc
 # store_daily_metrics row count. Both are fixed by the route/Query bound
 # and the bundled fixture, not by anything these tests do.
 PAGE_SIZE_CAP = 200
-STORE_METRICS_TOTAL = 2944
+STORE_METRICS_TOTAL = 5848
 
 
 def test_concurrent_reads_all_succeed_within_bound(client):

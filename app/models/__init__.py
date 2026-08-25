@@ -1,10 +1,10 @@
 from app.models.economic import (
     DimSeries,
     FactObservation,
+    MartEconomicSummary,
+    MartGdp,
     MartInflation,
     MartLaborMarket,
-    MartGdp,
-    MartEconomicSummary,
 )
 
 __all__ = [
