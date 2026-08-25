@@ -71,8 +71,8 @@ The load-bearing read/serve logic and the tests that hold it.
 
 - **Parquet reading** — `test_grocery_service.py`. `load_store_metrics_df`
   and `load_anomaly_flags_df` read the resolved parquet and return a
-  DataFrame with the canonical schema, the canonical row count (2944 store
-  metrics, 178 anomaly flags), and `datetime.date` objects in the `date`
+  DataFrame with the canonical schema, the canonical row count (5,848 store
+  metrics, 343 anomaly flags), and `datetime.date` objects in the `date`
   column. The missing-path branch raises `FileNotFoundError`
   (`test_load_*_raises_when_path_missing`).
 - **Schema enforcement** — `test_etl_contract.py::
@@ -188,54 +188,23 @@ Coverage by mode after this pass:
 
 ## Test categories observed
 
-Snapshot from the test-quality pass on 2026-05-21 — the suite held 126
-tests at the start and 130 at the end of that pass. Classification:
+A test-quality pass graded the suite under the business/structural/
+ceremony split. Route tests over mocked services are inherently
+structural (the mock defines the value, so only the shape is a real
+assertion); the business-correctness weight sits in the service-layer,
+contract, and middleware tests. The pass moved the balance in that
+direction, and later passes kept adding on the business-correctness
+side: the SHA-256 fixture pins and rule-matrix cases in
+`test_etl_contract.py` and `test_anomalies.py`, the X-Request-ID
+validation shapes in `test_request_correlation.py`, the lazy-Settings
+lifecycle cases in `test_config.py`, the parquet read-caching cases in
+`test_grocery_service.py`, and the performance and fault-injection
+suites (`test_performance.py`, `test_resilience.py`).
 
-| Category             | At start | After pass |
-|----------------------|----------|------------|
-| Business-correctness | 38       | 49         |
-| Structural           | 86       | 79         |
-| Ceremony             | 2        | 2          |
-| Uncategorizable      | 0        | 0          |
-| Total                | 126      | 130        |
-
-Suite size after that pass (verified 2026-05-27): 160 tests. Six were added in
-the canonical-refresh pass: four parametrized cases pinning each bundled
-fixture's SHA-256 to the upstream ETL canonical (in
-`test_etl_contract.py`, business-correctness — each asserts an
-independently captured hash, not a re-hash of the same bytes), and two
-parametrized cases extending the route-level `rule_id` matrix in
-`test_anomalies.py` to cover `department_coverage` and
-`revenue_zscore_28d`. A follow-on commit pinned the macro DB probe
-warning to carry no traceback (business-correctness, asserts the
-formatted log record), bringing the total to 142. The
-operational-seams pass added nine `test_request_correlation.py` cases
-covering X-Request-ID header validation (oversized, malformed,
-uppercase, length-cap-overflow shapes), bringing the total to 151;
-the same pass added three `test_config.py` cases pinning the lazy
-Settings lifecycle and the module-level import shim, bringing the
-total to 154; the same pass added six `test_grocery_service.py` cases
-pinning parquet read caching (per-loader cache, cache-clear helper,
-and cache re-keying on resolved-path change), bringing the total to
-160. Five earlier
-additions live in `test_health.py`,
-covering the per-pipeline reporting shape introduced when `/health` was
-split into independent grocery and macro sub-objects; those are
-structural — the endpoint's status and reason fields are not derived
-quantities. The split above remains directionally accurate; see
-`README.md` for the current per-file breakdown.
-
-Since that pass, detection-quality and chart-fix work brought the
-measured suite to 173 without updating this note; the per-file table in
-`README.md` is the verified source for the current breakdown. The
-performance-and-fault-injection pass adds six more — three in
-`test_performance.py` (concurrent throughput, largest-payload retrieval,
-cache-effectiveness) and three in `test_resilience.py` (mid-request
-loader failure returning a clean 500, concurrent access to the cached
-frames, boundary pagination under load) — for a verified total of 179
-tests as of 2026-06-02. A documentation drift-guard pass then added one
-more — `test_docs_count.py`, which pins the README test-count headline to
-the live collected count — bringing the verified total to 180.
+Exact counts are deliberately not recorded here. The previous version
+of this file kept a running tally that had to be revised seven times in
+as many weeks and was still stale; run `pytest --collect-only -q` for
+the current figure.
 
 The suite is structural-heavy by construction: most route test modules mock
 the service layer, so they can only assert dispatch wiring and response
@@ -281,11 +250,11 @@ strengthened:
 
 No production bugs were discovered while strengthening the targeted tests.
 Every strengthened test passes against the current code. One documentation
-drift was noted and addressed in a follow-up commit (700806c): the
-`app/api/routes/department_metrics.py` docstring previously described the
-canonical dataset as "14,706 rows covering 2025-07-01 through 2025-12-31";
-it now reports 29,414 rows covering 2024-07-01 through 2025-12-31, in line
-with the bundled parquet.
+drift was noted and addressed in a follow-up commit: the
+`app/api/routes/department_metrics.py` docstring described a stale
+canonical row count and window. That docstring has since gone stale and
+been corrected again across canonical refreshes — route docstrings that
+cite dataset figures are a recurring drift surface.
 
 ## For downstream phases
 

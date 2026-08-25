@@ -652,10 +652,9 @@ a safety check when verifying a deployment ("am I really pointing at the
 live ETL?").
 
 **The demo dataset is real pipeline output.** It is a byte-identical
-snapshot of a paired-year canonical run of the upstream sim engine + ETL
-pipeline — 184 days × 2 years (2024-07-01 through 2024-12-31 and
-2025-07-01 through 2025-12-31), eight Knot Shore-style stores, ten
-departments per store. The sim engine generates synthetic store-day
+snapshot of the canonical two-year run of the upstream sim engine + ETL
+pipeline — the full calendar years 2024 and 2025 (731 days), eight
+Knot Shore-style stores, ten departments per store. The sim engine generates synthetic store-day
 data, the ETL ingests it and runs anomaly detection, and the resulting
 parquets are committed to this repo as the bundled fixtures. Treat these
 values as representative of the response shape and dynamic range your UI
