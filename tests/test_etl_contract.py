@@ -41,11 +41,10 @@ def _isolate_grocery_caches():
     svc._clear_grocery_caches()
 
 # Values below are read directly off the canonical parquets in app/fixtures/.
-# store 1 on 2024-07-01 is the earliest store-day in store_daily_metrics.
 KNOWN_STORE_ID = 1
 KNOWN_DATE = "2024-07-01"
 KNOWN_TOTAL_SALES = 86429.35
-KNOWN_TRANSACTION_COUNT = 2337
+KNOWN_TRANSACTION_COUNT = 2318
 DEPARTMENTS_PER_STORE = 10
 
 # Maps each live-path setting to its canonical parquet filename.
@@ -57,22 +56,23 @@ CANONICAL_FILES = {
 }
 
 # SHA-256 of each bundled fixture, copied verbatim from the upstream ETL's
-# data/processed/canonical/ output after the margin and reconciliation
-# rules merge (economic-data-etl PR #33, merged 2026-05). These are the
+# data/processed/canonical/ output after the two-year canonical refresh
+# (full 2024 + 2025 window, regenerated 2026-08). These are the
 # authoritative hashes for the contract — independently computed at the
 # ETL boundary, pinned here so the test catches drift instead of
-# co-computing both sides.
+# co-computing both sides. dim_stores is unchanged from the prior
+# canonical: the refresh touched the daily data, not the store dimension.
 EXPECTED_FIXTURE_SHA256 = {
     "store_daily_metrics.parquet":
-        "2ba24c7423ee7da2bccab3ba87765c77653c34955c565c9c66e1e49fa56b13a5",
+        "141c31b4eca52adbab5c8281ecd134c0c22d9e22df4c3de19ed0d6caa781f528",
     "department_daily_metrics.parquet":
-        "bfe2a09525956d64c31fac91276140a433bd62466da837da78119ddd1be1f3ba",
+        "cf89acb71ed1e46a9b6d21df61f114a3c60b3cbd9cf8632172219b970e552ca7",
     "dim_stores.parquet":
         "39ecd78ca98a23cafe57c7739755b250ae09ff32529459fae5440d61758e2125",
     "anomaly_flags.parquet":
-        "11f0ca0581a12cb7f3cfc53fe712cff498b8a1fceb1c69cc13c147469e6341b1",
+        "c9bfd51eba74860ac5ae8142ae735b6162e67318be4a96d7a5cfee93b0383569",
     "detection_quality.json":
-        "1bba2d2cdc45501f250eeb8b3f3abe88184b8225d21b4ba466ca2892e418c04f",
+        "98b3db94554b0f32b4ca511924dab1bf1b6744cd4688aa547d9e9af3555052c3",
 }
 
 # Extensions Git's autocrlf treats as text and normalizes to LF in the
@@ -141,10 +141,10 @@ def test_bundled_fixture_matches_canonical_sha256(filename, expected_sha256):
 def test_store_1_2025_revenue_matches_canary():
     """Pins Store 1's 2025 revenue at the documented canary value.
 
-    Business-correctness: the portal's /about/architecture page claims
-    Store 1 generated $18,598,268 in 2025 (the actual value to the cent
-    is $18,598,267.84). This test pins that claim mechanically so the
-    prose can't drift from the data — a canonical regeneration that
+    Business-correctness: the portal's /about/architecture page cites
+    Store 1's 2025 revenue (the value to the cent is $35,882,160.74 on
+    the two-year canonical). This test pins that claim mechanically so
+    the prose can't drift from the data — a canonical regeneration that
     moves the value fails CI here, prompting a documentation update
     (or an investigation into why the value changed).
 
@@ -166,7 +166,7 @@ def test_store_1_2025_revenue_matches_canary():
         (df["store_id"] == 1) & (df["date"].map(lambda d: d.year) == 2025)
     ]
     actual = round(store_1_2025["total_sales"].sum(), 2)
-    expected = 18_598_267.84
+    expected = 35_882_160.74
     assert actual == expected, (
         f"Store 1 2025 revenue drifted from documented canary. "
         f"Expected ${expected:,.2f}, got ${actual:,.2f}. "

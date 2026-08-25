@@ -8,12 +8,12 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
-from app.services import grocery as svc
 from app.schemas.grocery import (
     AnomalyFlagOut,
     DashboardSummaryOut,
     StoreMetricOut,
 )
+from app.services import grocery as svc
 
 
 @pytest.fixture(autouse=True)
@@ -47,8 +47,8 @@ def test_load_store_metrics_df_returns_dataframe():
     assert isinstance(df, pd.DataFrame)
     assert set(df.columns) == METRICS_COLS
     # The bundled fixture is the ETL canonical store_daily_metrics parquet:
-    # 8 stores across 2024-07-01..2025-12-31 (368 days) = 2944 store-days.
-    assert len(df) == 2944
+    # 8 stores across 2024-01-01..2025-12-31 (731 days) = 5848 store-days.
+    assert len(df) == 5848
     # The read pipeline must preserve the canonical date dtype — rows carry
     # datetime.date objects, not strings — so date-range filters compare
     # correctly against the typed query parameters.
@@ -56,7 +56,7 @@ def test_load_store_metrics_df_returns_dataframe():
     # A known store-day value read directly off the canonical parquet.
     row = df[(df["store_id"] == 1) & (df["date"] == date(2024, 7, 1))].iloc[0]
     assert row["total_sales"] == 86429.35
-    assert row["transaction_count"] == 2337
+    assert row["transaction_count"] == 2318
 
 
 def test_load_anomaly_flags_df_returns_dataframe():
@@ -64,7 +64,7 @@ def test_load_anomaly_flags_df_returns_dataframe():
     assert isinstance(df, pd.DataFrame)
     assert set(df.columns) == FLAG_COLS
     # The bundled fixture is the ETL canonical anomaly_flags parquet.
-    assert len(df) == 178
+    assert len(df) == 343
     assert isinstance(df["date"].iloc[0], date)
     # A known flag read off the canonical parquet: store 1's
     # gross_margin_band exception on 2024-07-14, where the gross margin
@@ -105,35 +105,35 @@ def test_get_store_metrics_returns_total_and_items():
     total, items = svc.get_store_metrics(limit=10, offset=0)
     assert isinstance(total, int)
     # total is the full canonical row count, independent of the page size.
-    assert total == 2944
+    assert total == 5848
     assert all(isinstance(item, StoreMetricOut) for item in items)
     assert len(items) == 10
     # The service sorts by (date, store_id), so the first page opens with
     # store 1 on the earliest canonical date.
     first = items[0]
-    assert first.date == date(2024, 7, 1)
+    assert first.date == date(2024, 1, 1)
     assert first.store_id == 1
-    assert first.total_sales == 86429.35
-    assert first.transaction_count == 2337
+    assert first.total_sales == 78729.42
+    assert first.transaction_count == 2064
 
 
 def test_get_store_metrics_pagination_honored():
     total_full, _ = svc.get_store_metrics(limit=1, offset=0)
     _, page_a = svc.get_store_metrics(limit=5, offset=0)
     _, page_b = svc.get_store_metrics(limit=5, offset=5)
-    assert total_full == 2944
+    assert total_full == 5848
     assert len(page_a) == 5
     assert len(page_b) == 5
     # Rows sort by (date, store_id). The first page is store-days 1-5 of the
     # opening canonical date; the second picks up at store 6 and rolls into
     # the next date once the eight stores are exhausted.
     assert [(r.date, r.store_id) for r in page_a] == [
-        (date(2024, 7, 1), 1), (date(2024, 7, 1), 2), (date(2024, 7, 1), 3),
-        (date(2024, 7, 1), 4), (date(2024, 7, 1), 5),
+        (date(2024, 1, 1), 1), (date(2024, 1, 1), 2), (date(2024, 1, 1), 3),
+        (date(2024, 1, 1), 4), (date(2024, 1, 1), 5),
     ]
     assert [(r.date, r.store_id) for r in page_b] == [
-        (date(2024, 7, 1), 6), (date(2024, 7, 1), 7), (date(2024, 7, 1), 8),
-        (date(2024, 7, 2), 1), (date(2024, 7, 2), 2),
+        (date(2024, 1, 1), 6), (date(2024, 1, 1), 7), (date(2024, 1, 1), 8),
+        (date(2024, 1, 2), 1), (date(2024, 1, 2), 2),
     ]
 
 
@@ -179,20 +179,20 @@ def test_get_store_metrics_empty_when_no_match():
 # ---------------------------------------------------------------------------
 
 def test_get_anomalies_returns_total_and_items():
-    total, items = svc.get_anomalies(limit=200, offset=0)
+    total, items = svc.get_anomalies(limit=400, offset=0)
     assert isinstance(total, int)
     # Full canonical anomaly_flags row count.
-    assert total == 178
-    assert len(items) == 178
+    assert total == 343
+    assert len(items) == 343
     assert all(isinstance(item, AnomalyFlagOut) for item in items)
     # The service sorts by (date, store_id, rule_id); the first flag is
-    # store 8's department_reconciliation exception on the earliest
-    # flagged date.
+    # store 6's gross_margin_band exception on the earliest flagged date,
+    # a negative-margin injection.
     first = items[0]
-    assert first.date == date(2024, 7, 2)
-    assert first.store_id == 8
-    assert first.rule_id == "department_reconciliation"
-    assert first.actual_value == 50930.50
+    assert first.date == date(2024, 1, 3)
+    assert first.store_id == 6
+    assert first.rule_id == "gross_margin_band"
+    assert first.actual_value == -0.1618
 
 
 def test_get_anomalies_severity_filter():
@@ -236,14 +236,16 @@ def test_get_anomalies_pagination_honored():
     assert len(page_a) == 2
     assert len(page_b) == 2
     # Rows sort by (date, store_id, rule_id); offset=2 advances exactly two
-    # rows into that ordering.
+    # rows into that ordering. The 2024-01-08 store-7 anomaly carries both a
+    # coverage and a reconciliation flag, so the boundary falls mid-store-day —
+    # a sharper offset check than one flag per row would give.
     assert [(f.date, f.store_id, f.rule_id) for f in page_a] == [
-        (date(2024, 7, 2), 8, "department_reconciliation"),
-        (date(2024, 7, 4), 1, "department_reconciliation"),
+        (date(2024, 1, 3), 6, "gross_margin_band"),
+        (date(2024, 1, 8), 1, "department_coverage"),
     ]
     assert [(f.date, f.store_id, f.rule_id) for f in page_b] == [
-        (date(2024, 7, 8), 7, "department_reconciliation"),
-        (date(2024, 7, 10), 1, "department_reconciliation"),
+        (date(2024, 1, 8), 7, "department_coverage"),
+        (date(2024, 1, 8), 7, "department_reconciliation"),
     ]
 
 
