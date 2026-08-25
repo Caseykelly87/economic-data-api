@@ -1,21 +1,21 @@
 from app.schemas.economic import (
-    ObservationOut,
-    SeriesOut,
-    SeriesDetailOut,
     InflationOut,
-    UnemploymentOut,
     KeyIndicator,
+    ObservationOut,
+    SeriesDetailOut,
+    SeriesOut,
     SummaryOut,
+    UnemploymentOut,
 )
 from app.schemas.grocery import (
-    StoreMetricOut,
-    PaginatedStoreMetricsOut,
     AnomalyFlagOut,
-    PaginatedAnomaliesOut,
-    StoreRevenueRank,
-    SeverityCount,
     DailySalesPoint,
     DashboardSummaryOut,
+    PaginatedAnomaliesOut,
+    PaginatedStoreMetricsOut,
+    SeverityCount,
+    StoreMetricOut,
+    StoreRevenueRank,
 )
 
 __all__ = [

@@ -24,7 +24,6 @@ from __future__ import annotations
 
 from prometheus_client import Counter
 
-
 grocery_data_source_total = Counter(
     "grocery_data_source_total",
     "Number of grocery requests served, labeled by data source.",

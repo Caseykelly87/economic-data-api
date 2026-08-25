@@ -4,9 +4,10 @@ Usage: python scripts/inspect_schema.py
 
 Requires a valid .env file in the project root.
 """
-from sqlalchemy import create_engine, text
-import sys
 import os
+import sys
+
+from sqlalchemy import create_engine, text
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -17,7 +18,9 @@ engine = create_engine(settings.database_url)
 with engine.connect() as conn:
     # Show schemas
     print("\n=== SCHEMAS ===")
-    schemas = conn.execute(text("SELECT schema_name FROM information_schema.schemata ORDER BY schema_name")).fetchall()
+    schemas = conn.execute(
+        text("SELECT schema_name FROM information_schema.schemata ORDER BY schema_name")
+    ).fetchall()
     for s in schemas:
         print(" ", s[0])
 

@@ -11,10 +11,6 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.core.config import settings
-from app.core.logging_config import configure_logging
-from app.core import metrics as _metrics  # noqa: F401  # register custom counters with the prometheus default registry at startup
-from app.db.session import get_db
 from app.api.routes import (
     anomalies,
     dashboard,
@@ -25,6 +21,12 @@ from app.api.routes import (
     series,
     store_metrics,
 )
+from app.core import (
+    metrics as _metrics,  # noqa: F401  # register custom counters with the prometheus default registry at startup
+)
+from app.core.config import settings
+from app.core.logging_config import configure_logging
+from app.db.session import get_db
 
 # Configure logging before the app object is used by anything else.
 configure_logging(settings.LOG_LEVEL)
@@ -152,7 +154,10 @@ if settings.grocery_data_source == "fixtures":
         "grocery_data_source_fallback",
         data_source="fixtures",
         fixtures_dir=str(settings.GROCERY_FIXTURES_DIR),
-        reason="STORE_METRICS_PATH, ANOMALY_FLAGS_PATH, DEPARTMENT_METRICS_PATH, and/or DIM_STORES_PATH unset or unreadable",
+        reason=(
+            "STORE_METRICS_PATH, ANOMALY_FLAGS_PATH, DEPARTMENT_METRICS_PATH, "
+            "and/or DIM_STORES_PATH unset or unreadable"
+        ),
     )
 else:
     logger.info(

@@ -21,7 +21,6 @@ from app.schemas.grocery import (
     StoreRevenueRank,
 )
 
-
 SEVERITY_LEVELS = ("info", "warning", "critical")
 
 logger = structlog.get_logger(__name__)

@@ -24,8 +24,12 @@ def list_series(
 @router.get("/{series_id}", response_model=SeriesDetailOut)
 def get_series(
     series_id: str,
-    start_date: date | None = Query(default=None, description="Filter observations on or after this date"),
-    end_date: date | None = Query(default=None, description="Filter observations on or before this date"),
+    start_date: date | None = Query(
+        default=None, description="Filter observations on or after this date"
+    ),
+    end_date: date | None = Query(
+        default=None, description="Filter observations on or before this date"
+    ),
     db: Session = Depends(get_db),
 ):
     """Get metadata and observations for a single series, optionally filtered by date range."""

@@ -1,15 +1,21 @@
 import os
 
 # Provide dummy DB config so Settings() doesn't fail during import in test environments.
-for _var, _val in [("DB_HOST", "localhost"), ("DB_NAME", "test"), ("DB_USER", "test"), ("DB_PASSWORD", "test")]:
+for _var, _val in [
+    ("DB_HOST", "localhost"),
+    ("DB_NAME", "test"),
+    ("DB_USER", "test"),
+    ("DB_PASSWORD", "test"),
+]:
     os.environ.setdefault(_var, _val)
 
-import pytest  # noqa: E402
 from unittest.mock import MagicMock  # noqa: E402
+
+import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.main import app  # noqa: E402
 from app.db.session import get_db  # noqa: E402
+from app.main import app  # noqa: E402
 
 
 @pytest.fixture

@@ -21,7 +21,9 @@ def _obs(d: date = date(2024, 1, 1), v: float = 310.3) -> ObservationOut:
 
 
 def _detail(**kwargs) -> SeriesDetailOut:
-    defaults = dict(series_id="CPIAUCSL", series_name="Consumer Price Index", source="BLS", observations=[])
+    defaults = dict(
+        series_id="CPIAUCSL", series_name="Consumer Price Index", source="BLS", observations=[]
+    )
     return SeriesDetailOut(**{**defaults, **kwargs})
 
 
